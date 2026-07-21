@@ -1,0 +1,6 @@
+/artifacts/
+/build/
+*.log
+src/OblivionRenamer/diagnostics/*.txt
+!src/OblivionRenamer/diagnostics/.gitkeep
+
