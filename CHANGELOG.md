@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.3.3-stale-row-dev
+
+- Treat a unique stable custom-name key as authoritative when the Inventory row
+  still displays the pre-rename value.
+- Prefill a repeated rename with the map's current saved value instead of
+  falsely reporting an ambiguity.
+- Clarify that Inventory refresh requires closing and reopening the full player
+  menu before saving.
+
+## 0.3.2-reload-identity-dev
+
+- Account for reloaded custom items whose `FullName` resolves to their display
+  text instead of retaining the original `UI_UserInputText_*` key string.
+- Preserve the dynamic-form and enchant-save checks, then allow a fallback only
+  when the visible item name resolves to exactly one entry in the saved custom
+  name map.
+- Capture a fresh read-only item identity report on every Inventory F2 attempt
+  while this reload path is being verified.
+
+## 0.3.1-item-rename-dev
+
+- Clarified successful rename notifications for both supported contexts: reopen
+  Magic or Inventory to refresh the list, then save the game to persist the
+  change.
+
+## 0.3.0-item-rename-dev
+
+- Enabled F2 renaming for a highlighted player-created enchanted item.
+- Require the active Inventory widget entry, matching hovered form pointers, an
+  `ff` dynamic form ID, valid enchant-save data, a nonzero source form ID, and
+  exactly one matching `UI_UserInputText_*` saved-name key before opening the
+  dialog.
+- Reuse the spell renamer's typed `FText` map replacement, pre-write undo
+  record, post-write verification, and native in-game text-entry screen.
+- Removed the unsupported copied-array `ForEach` diagnostic call that emitted a
+  harmless caught warning during the successful item probe.
+
+## 0.2.1-item-probe-dev
+
+- Replaced the unused global hovered-form bridge with the active Inventory
+  widget's `CurrentHoveredItem` and its exact `GetProperties()` row.
+- Added guarded fallbacks through the widget's `CurrentFormID` and
+  `ObjectHoveredFormID` fields.
+- Kept all enchanted-item paths read-only while the new selection identity is
+  verified in the target runtime.
+
 ## 0.2.0-item-probe-dev
 
 - Removed the optional `SetCurrentSpellEquiped` refresh call. The saved-name

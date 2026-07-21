@@ -58,13 +58,22 @@ foreach ($requiredToken in @(
 
 foreach ($requiredProbeToken in @(
     'INVENTORY_MENU_PAGE = 1',
-    'GetInventoryHoveredObjectForm',
-    'GetCurrentPageItemsInventory',
+    'WBP_OriginalMenu_Inventory_C',
+    'CurrentHoveredItem',
+    'hovered_item:GetProperties()',
     'bIsEnchantedObject',
     'EnchantSaveData',
     'SourceFormID',
     'diagnostics/item-probe.txt',
-    'read_only=true'
+    'read_only=true',
+    'open_item_rename_dialog',
+    'find_saved_name_target_by_key',
+    'Inventory row name is stale; using current saved value',
+    'keyed_target.current_value',
+    'Resolved reloaded custom item through its unique saved-name value',
+    '^UI_UserInputText_',
+    'string.lower(form_id)',
+    'entity_kind = "custom-enchanted-item"'
 )) {
     if (-not $source.Contains($requiredProbeToken)) {
         throw "Required read-only item probe token was not found: $requiredProbeToken"
