@@ -4,8 +4,9 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Rename player-created spells and player-created enchanted items from inside
-**The Elder Scrolls IV: Oblivion Remastered**. Highlight a supported creation,
-press **F2**, and enter its new name in the game's native text-entry screen.
+**The Elder Scrolls IV: Oblivion Remastered**. Highlight a custom spell or
+enchanted item, press **F2**, and enter its new name in the game's native
+text-entry screen.
 
 The mod deliberately rejects built-in spells, ordinary equipment, quest
 records, and ambiguous matches. It changes only the matching value in the
@@ -67,7 +68,8 @@ WinGDK
 
 ### Rename a custom spell
 
-1. Open **Magic** and highlight a player-created spell.
+1. Open **Magic** and highlight a player-created spell with the mouse or
+   keyboard. It does not need to be the equipped spell.
 2. Press **F2**.
 3. Enter the new name and choose **OK**, or choose **Back/Escape** to cancel.
 4. Reopen Magic if the list has not refreshed, then make a normal game save.
@@ -79,7 +81,7 @@ rewrite another mod's private data.
 ### Rename a custom enchanted item
 
 1. Open **Inventory** and highlight an item created and named at an enchanting
-   altar.
+   altar with the mouse or keyboard. You do not need to click it.
 2. Press **F2** and confirm the new name.
 3. Close the full player menu and reopen Inventory to refresh the displayed
    row, then make a normal game save.
@@ -87,6 +89,9 @@ rewrite another mod's private data.
 The Inventory row may continue to show the previous name until the player menu
 is reopened. A second F2 press is still safe: the mod uses the current saved
 value associated with the item's stable key.
+
+Both menus target the currently highlighted row. Clicking or equipping a spell
+or item is not required, which avoids unrelated equipment changes.
 
 ## Safety and recovery
 

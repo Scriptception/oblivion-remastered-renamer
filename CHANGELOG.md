@@ -5,7 +5,7 @@ All notable changes to this project are documented here. The project follows
 
 ## [Unreleased]
 
-## [1.0.0-rc.1] - 2026-07-21
+## [1.0.0-rc.2] - 2026-07-21
 
 ### Added
 
@@ -16,6 +16,8 @@ All notable changes to this project are documented here. The project follows
 - Duplicate-name, blank-name, control-character, and length validation.
 - Detection and recovery for stale Inventory rows after an item rename.
 - Contextual refresh guidance and a Spell Hotkeys rebind notice.
+- Mouse and keyboard targeting of the highlighted Magic row rather than the
+  equipped spell.
 - Reproducible release packaging, SHA-256 checksums, and CI validation.
 
 ### Safety
@@ -28,4 +30,4 @@ All notable changes to this project are documented here. The project follows
 - Never invoke the developer console or issue save commands.
 
 [Unreleased]: https://github.com/Scriptception/oblivion-remastered-renamer/compare/v1.0.0...HEAD
-[1.0.0-rc.1]: https://github.com/Scriptception/oblivion-remastered-renamer/releases/tag/v1.0.0-rc.1
+[1.0.0-rc.2]: https://github.com/Scriptception/oblivion-remastered-renamer/releases/tag/v1.0.0-rc.2

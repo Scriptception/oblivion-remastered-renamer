@@ -5,7 +5,8 @@
 Oblivion Renamer is a single UE4SS Lua mod. F2 dispatches according to the
 visible player-menu page:
 
-- Magic resolves the highlighted spell through `VMagicMenuViewModel`.
+- Magic resolves `CurrentHoveredItem` from the active
+  `WBP_ModernMenu_MagicMenu_C` widget.
 - Inventory resolves `CurrentHoveredItem` from the active
   `WBP_OriginalMenu_Inventory_C` widget and reads its item properties.
 
@@ -27,9 +28,10 @@ and rejects direct string writes.
 
 ### Spells
 
-A spell is eligible only when its visible name maps to exactly one saved custom
-name entry. Built-in spells, powers, abilities, and ambiguous duplicate names
-are rejected.
+A spell is eligible only when it is the currently highlighted Magic row and its
+visible name maps to exactly one saved custom-name entry. Built-in spells,
+powers, abilities, and ambiguous duplicate names are rejected. The equipped
+spell is not used as an identity fallback.
 
 ### Enchanted items
 

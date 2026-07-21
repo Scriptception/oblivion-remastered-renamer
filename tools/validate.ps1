@@ -23,6 +23,9 @@ if (-not $sourceVersionMatch.Success -or $sourceVersionMatch.Groups[1].Value -ne
 if ($source -notmatch 'RegisterKeyBind\(Key\.F2') {
     throw 'F2 key binding was not found.'
 }
+if ($source.Contains('GetCurrentSpellEquiped')) {
+    throw 'Equipped-spell targeting detected; Magic renames must follow the highlighted row.'
+}
 
 $forbidden = @(
     'ProcessConsoleExec',
@@ -87,6 +90,18 @@ foreach ($requiredItemToken in @(
 )) {
     if (-not $source.Contains($requiredItemToken)) {
         throw "Required custom-item safety token was not found: $requiredItemToken"
+    }
+}
+
+foreach ($requiredSpellToken in @(
+    'WBP_ModernMenu_MagicMenu_C',
+    'read Magic menu CurrentHoveredItem',
+    'read highlighted spell properties',
+    'HasFocusedDescendants',
+    'get_highlighted_magic_spell'
+)) {
+    if (-not $source.Contains($requiredSpellToken)) {
+        throw "Required highlighted-spell targeting token was not found: $requiredSpellToken"
     }
 }
 

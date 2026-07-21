@@ -23,6 +23,8 @@ Use a backed-up test save and the exact release-candidate archive.
 ### Custom spell
 
 - A player-created spell can be renamed.
+- Mouse and keyboard navigation both target the currently highlighted spell,
+  even when a different spell is equipped.
 - The Magic list refreshes after reopening it.
 - The new name persists after save, exit, relaunch, and reload.
 - A built-in spell is rejected.
@@ -32,6 +34,8 @@ Use a backed-up test save and the exact release-candidate archive.
 ### Custom enchanted item
 
 - A player-created named enchanted item can be renamed.
+- Mouse and keyboard navigation both target the currently highlighted Inventory
+  row without equipping or unequipping it.
 - A second rename works before the stale Inventory row refreshes.
 - The list refreshes after closing and reopening the player menu.
 - The final name persists after save, exit, relaunch, and reload.
