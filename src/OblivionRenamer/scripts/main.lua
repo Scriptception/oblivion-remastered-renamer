@@ -1,10 +1,11 @@
 local MOD_NAME = "[OblivionRenamer]"
-local MOD_VERSION = "0.1.0-dev"
+local MOD_VERSION = "0.1.1-dev"
 local MAGIC_MENU_PAGE = 2
 local MAX_NAME_LENGTH = 80
 
 local TEXT_EDIT_ASSET = "/Game/UI/Legacy/ModalLayer/WBP_LegacyMenu_TextEdit"
 local TEXT_EDIT_CLASS = TEXT_EDIT_ASSET .. ".WBP_LegacyMenu_TextEdit_C"
+local TEXT_EDIT_SHORT_CLASS = "WBP_LegacyMenu_TextEdit_C"
 local OK_HOOK = TEXT_EDIT_CLASS .. ":OnOkButtonClicked"
 local BACK_HOOK = TEXT_EDIT_CLASS .. ":OnBackButtonClicked"
 local UNDO_PATH = "ue4ss/Mods/OblivionRenamer/undo/last-rename.txt"
@@ -95,6 +96,15 @@ local function plain_text(value)
     return safe("value ToString", function()
         return value:ToString()
     end)
+end
+
+local function describe_object(object)
+    if not is_valid_object(object) then
+        return "<invalid>"
+    end
+    return safe("object full name", function()
+        return object:GetFullName()
+    end) or "<unknown>"
 end
 
 local function get_magic_menu()
@@ -367,15 +377,60 @@ local function ensure_dialog_hooks()
 end
 
 local function load_text_edit_class()
-    safe("load native text-edit asset", function()
-        LoadAsset(TEXT_EDIT_ASSET)
-    end)
-    local class = safe("find native text-edit class", function()
-        return StaticFindObject(TEXT_EDIT_CLASS)
-    end)
-    if is_valid_object(class) then
-        return class
+    local object_path = TEXT_EDIT_ASSET .. ".WBP_LegacyMenu_TextEdit"
+    local load_paths = {
+        TEXT_EDIT_CLASS,
+        TEXT_EDIT_ASSET .. "_C",
+        object_path,
+        TEXT_EDIT_ASSET,
+    }
+
+    for _, load_path in ipairs(load_paths) do
+        local loaded = safe("load native text-edit asset " .. load_path, function()
+            return LoadAsset(load_path)
+        end)
+        if is_valid_object(loaded) then
+            log("LoadAsset resolved " .. load_path .. " as " .. describe_object(loaded))
+        else
+            log("LoadAsset returned no object for " .. load_path)
+        end
+
+        local direct = safe("find native text-edit class by full path", function()
+            return StaticFindObject(TEXT_EDIT_CLASS)
+        end)
+        if is_valid_object(direct) then
+            log("Resolved native text-edit class directly: " .. describe_object(direct))
+            return direct
+        end
+
+        local by_short_name = safe("find native text-edit class by short name", function()
+            return FindObject("Class", TEXT_EDIT_SHORT_CLASS)
+        end)
+        if is_valid_object(by_short_name) then
+            log("Resolved native text-edit class by short name: " .. describe_object(by_short_name))
+            return by_short_name
+        end
     end
+
+    local discovered = nil
+    safe("scan loaded objects for native text-edit class", function()
+        ForEachUObject(function(object)
+            if discovered == nil and is_valid_object(object) then
+                local short_name = safe("loaded object short name", function()
+                    return object:GetFName():ToString()
+                end)
+                if short_name == TEXT_EDIT_SHORT_CLASS then
+                    discovered = object
+                end
+            end
+        end)
+    end)
+    if is_valid_object(discovered) then
+        log("Resolved native text-edit class through the loaded-object registry: " .. describe_object(discovered))
+        return discovered
+    end
+
+    log("Native text-edit class was not present after all load and lookup forms.")
     return nil
 end
 

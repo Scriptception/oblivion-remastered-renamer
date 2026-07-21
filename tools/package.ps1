@@ -1,5 +1,5 @@
 param(
-    [string]$Version = '0.1.0-native-dialog-dev'
+    [string]$Version = '0.1.1-native-dialog-loader-dev'
 )
 
 $ErrorActionPreference = 'Stop'
