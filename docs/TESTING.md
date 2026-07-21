@@ -29,6 +29,8 @@ Use a backed-up test save and the exact release-candidate archive.
 - The new name persists after save, exit, relaunch, and reload.
 - A built-in spell is rejected.
 - A duplicate target name is rejected.
+- Pre-existing duplicate custom names are rejected rather than resolving one by
+  map order.
 - Spell Hotkeys users receive a rebind notice.
 
 ### Custom enchanted item

@@ -113,6 +113,11 @@ backup save while evaluating any mod that changes save-backed data.
 - Sorting prefixes and tags are ordinary name text and are preserved.
 - New names already used by another custom spell or item are rejected to avoid
   ambiguous future lookups.
+- Oblivion itself can create duplicate custom names. The Magic row exposes its
+  displayed name and inventory index, but not its stable saved-name key. If two
+  custom creations already share a displayed name, the mod refuses to guess
+  which saved entry to change. Reopen Magic and retry if the duplicate was only
+  a temporary, unsaved state.
 - Built-in content is intentionally outside this mod's scope; use a dedicated
   sorting/tagging mod for ordinary records.
 - Game updates or different UE4SS builds may change reflected APIs. Include the

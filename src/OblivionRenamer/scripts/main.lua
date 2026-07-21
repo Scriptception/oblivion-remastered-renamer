@@ -1,5 +1,5 @@
 local MOD_NAME = "[OblivionRenamer]"
-local MOD_VERSION = "1.0.0-rc.2"
+local MOD_VERSION = "1.0.0"
 local INVENTORY_MENU_PAGE = 1
 local MAGIC_MENU_PAGE = 2
 local MAX_NAME_LENGTH = 80
@@ -631,10 +631,12 @@ local function commit_dialog()
 
     local conflict_count = count_saved_name_conflicts(new_name, state.saved_key)
     if conflict_count == nil then
+        log("Rename rejected because saved-name conflicts could not be checked.")
         notify("Rename cancelled: saved-name conflicts could not be checked.")
         return
     end
     if conflict_count > 0 then
+        log(string.format("Rename rejected because %d other custom entries use: %s", conflict_count, new_name))
         notify("Another custom spell or item already uses that name.")
         return
     end
@@ -906,10 +908,12 @@ local function open_spell_rename_dialog()
 
     local target = find_saved_name_target(selected_name)
     if target.count == 0 then
+        log("Spell rename rejected because no saved custom-name entry matched: " .. selected_name)
         notify("Only player-created spells can be renamed.")
         return
     end
     if target.count ~= 1 then
+        log(string.format("Spell rename rejected because %d saved entries share: %s", target.count, selected_name))
         notify("This name is shared by multiple custom entries; rename cancelled for safety.")
         return
     end

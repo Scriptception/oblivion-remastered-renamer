@@ -33,6 +33,11 @@ visible name maps to exactly one saved custom-name entry. Built-in spells,
 powers, abilities, and ambiguous duplicate names are rejected. The equipped
 spell is not used as an identity fallback.
 
+The reflected Magic row provides display properties and an inventory index, but
+not the stable `UI_UserInputText_*` key. Existing duplicate custom names are
+therefore rejected: choosing a key by map order or inventory position would
+risk changing the wrong creation.
+
 ### Enchanted items
 
 An item must satisfy every guard below:
