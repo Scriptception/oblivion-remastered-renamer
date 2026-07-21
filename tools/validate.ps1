@@ -56,4 +56,32 @@ foreach ($requiredToken in @(
     }
 }
 
-Write-Host 'Validation passed: F2, native dialog, typed FText map replacement, undo record, and console safety boundary.'
+foreach ($requiredProbeToken in @(
+    'INVENTORY_MENU_PAGE = 1',
+    'GetInventoryHoveredObjectForm',
+    'GetCurrentPageItemsInventory',
+    'bIsEnchantedObject',
+    'EnchantSaveData',
+    'SourceFormID',
+    'diagnostics/item-probe.txt',
+    'read_only=true'
+)) {
+    if (-not $source.Contains($requiredProbeToken)) {
+        throw "Required read-only item probe token was not found: $requiredProbeToken"
+    }
+}
+
+$mutationFunctionStart = $source.IndexOf('local function mutate_saved_name')
+$mutationFunctionEnd = $source.IndexOf('local function write_undo_record')
+if ($mutationFunctionStart -lt 0 -or $mutationFunctionEnd -le $mutationFunctionStart) {
+    throw 'Could not identify the bounded saved-name mutation function.'
+}
+$outsideMutationFunction = $source.Remove(
+    $mutationFunctionStart,
+    $mutationFunctionEnd - $mutationFunctionStart
+)
+if ($outsideMutationFunction.Contains('map:Add(')) {
+    throw 'Saved-name map mutation was found outside the bounded rename function.'
+}
+
+Write-Host 'Validation passed: spell rename, typed FText map replacement, undo record, read-only item probe, and console safety boundary.'

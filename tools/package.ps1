@@ -1,5 +1,5 @@
 param(
-    [string]$Version = '0.1.3-typed-ftext-dev'
+    [string]$Version = '0.2.0-item-probe-dev'
 )
 
 $ErrorActionPreference = 'Stop'

@@ -14,6 +14,10 @@ It rejects built-in spells and any ambiguous duplicate-name match, writes an
 undo record before changing memory, and asks the player to make a normal game
 save after a successful rename.
 
+F2 on a highlighted Inventory entry currently runs a read-only identity probe
+for the enchanted-item implementation. It writes diagnostics only and cannot
+rename or otherwise alter an item in this build.
+
 ## Target design
 
 - Highlight a player-created spell or enchanted item and press F2.

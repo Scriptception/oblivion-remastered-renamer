@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0-item-probe-dev
+
+- Removed the optional `SetCurrentSpellEquiped` refresh call. The saved-name
+  map already refreshes the visible row, while the extra reflected call could
+  emit a caught object-property error after an otherwise successful rename.
+- Added F2 context dispatch between Magic and Inventory.
+- Added a strictly read-only enchanted-item discovery report that correlates
+  the highlighted inventory row, underlying form, enchantment save data, and
+  saved custom-name map without changing game or save data.
+- Generalized dialog and undo metadata in preparation for item support.
+
 ## 0.1.3-dev
 
 - Corrected the saved-name map value type from a plain Lua string to a real

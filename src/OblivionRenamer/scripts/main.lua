@@ -1,5 +1,6 @@
 local MOD_NAME = "[OblivionRenamer]"
-local MOD_VERSION = "0.1.3-dev"
+local MOD_VERSION = "0.2.0-item-probe-dev"
+local INVENTORY_MENU_PAGE = 1
 local MAGIC_MENU_PAGE = 2
 local MAX_NAME_LENGTH = 80
 
@@ -9,6 +10,7 @@ local TEXT_EDIT_SHORT_CLASS = "WBP_LegacyMenu_TextEdit_C"
 local OK_HOOK = TEXT_EDIT_CLASS .. ":OnOkButtonClicked"
 local BACK_HOOK = TEXT_EDIT_CLASS .. ":OnBackButtonClicked"
 local UNDO_PATH = "ue4ss/Mods/OblivionRenamer/undo/last-rename.txt"
+local ITEM_PROBE_PATH = "ue4ss/Mods/OblivionRenamer/diagnostics/item-probe.txt"
 
 local UEHelpers = require("UEHelpers")
 
@@ -107,7 +109,7 @@ local function describe_object(object)
     end) or "<unknown>"
 end
 
-local function get_magic_menu()
+local function get_visible_player_menu_page()
     local player_menu = find_first_valid("VPlayerMenuViewModel")
     if not player_menu then
         return nil
@@ -116,13 +118,202 @@ local function get_magic_menu()
     local visible = safe("player menu visibility", function()
         return player_menu:IsVisible()
     end)
-    local page = safe("player menu page", function()
+    if visible ~= true then
+        return nil
+    end
+    return safe("player menu page", function()
         return player_menu:GetCurrentPage()
     end)
-    if visible ~= true or page ~= MAGIC_MENU_PAGE then
+end
+
+local function get_magic_menu()
+    if get_visible_player_menu_page() ~= MAGIC_MENU_PAGE then
         return nil
     end
     return find_first_valid("VMagicMenuViewModel")
+end
+
+local function append(lines, value)
+    lines[#lines + 1] = tostring(value or "")
+end
+
+local function write_lines(path, lines)
+    local file, open_error = io.open(path, "w")
+    if not file then
+        return false, tostring(open_error)
+    end
+    for _, line in ipairs(lines) do
+        file:write(line .. "\n")
+    end
+    file:close()
+    return true, nil
+end
+
+local function record_value(value)
+    local text = tostring(value or "")
+    text = string.gsub(text, "\\", "\\\\")
+    text = string.gsub(text, "\r", "\\r")
+    text = string.gsub(text, "\n", "\\n")
+    return text
+end
+
+local function inspect_saved_name_map(expected_key, selected_name)
+    local result = {
+        exact_key_count = 0,
+        exact_key_value = nil,
+        selected_value_count = 0,
+        selected_value_keys = {},
+    }
+    local objects = safe("FindAllOf UserInputTextSaveData for item probe", function()
+        return FindAllOf("UserInputTextSaveData")
+    end)
+    if not objects then
+        return result
+    end
+
+    for _, object in ipairs(objects) do
+        if is_valid_object(object) then
+            local map = safe("read UserInputTextsMap for item probe", function()
+                return object.UserInputTextsMap
+            end)
+            if map then
+                safe("scan UserInputTextsMap for item probe", function()
+                    map:ForEach(function(key_param, value_param)
+                        local key = plain_text(key_param:get())
+                        local value = plain_text(value_param:get())
+                        if expected_key and key == expected_key then
+                            result.exact_key_count = result.exact_key_count + 1
+                            result.exact_key_value = value
+                        end
+                        if selected_name and value == selected_name then
+                            result.selected_value_count = result.selected_value_count + 1
+                            if #result.selected_value_keys < 10 then
+                                result.selected_value_keys[#result.selected_value_keys + 1] = key
+                            end
+                        end
+                    end)
+                end)
+            end
+        end
+    end
+    return result
+end
+
+local function probe_highlighted_inventory_item()
+    local lines = {
+        "Oblivion Renamer enchanted-item discovery report",
+        "version=" .. MOD_VERSION,
+        "read_only=true",
+    }
+
+    if get_visible_player_menu_page() ~= INVENTORY_MENU_PAGE then
+        append(lines, "result=inventory-not-open")
+        write_lines(ITEM_PROBE_PATH, lines)
+        notify("Open Inventory, highlight a custom enchanted item, then press F2.")
+        return
+    end
+
+    local ui_subsystem = find_first_valid("VAltarUISubsystem")
+    local inventory_menu = find_first_valid("VInventoryMenuViewModel")
+    if not ui_subsystem or not inventory_menu then
+        append(lines, "result=required-view-model-missing")
+        write_lines(ITEM_PROBE_PATH, lines)
+        notify("The highlighted inventory item could not be inspected.")
+        return
+    end
+
+    local hovered_form = safe("read hovered inventory form", function()
+        return ui_subsystem:GetInventoryHoveredObjectForm()
+    end)
+    if not is_valid_object(hovered_form) then
+        hovered_form = safe("read hovered inventory form property", function()
+            return ui_subsystem.InventoryHoveredObjectForm
+        end)
+    end
+    append(lines, "hovered_form=" .. describe_object(hovered_form))
+    if not is_valid_object(hovered_form) then
+        append(lines, "result=hovered-form-missing")
+        write_lines(ITEM_PROBE_PATH, lines)
+        notify("No highlighted inventory item was found.")
+        return
+    end
+
+    local matching_rows = {}
+    local items = safe("read current inventory page items", function()
+        return inventory_menu:GetCurrentPageItemsInventory()
+    end)
+    if items then
+        safe("scan current inventory page items", function()
+            items:ForEach(function(index, item_param)
+                local row = item_param:get()
+                local row_form = safe("read inventory row form", function()
+                    return row.form
+                end)
+                if same_object(row_form, hovered_form) then
+                    matching_rows[#matching_rows + 1] = {
+                        index = index,
+                        name = plain_text(safe("read inventory row name", function()
+                            return row.Name
+                        end)),
+                        inventory_index = safe("read inventory row index", function()
+                            return row.InventoryIndex
+                        end),
+                    }
+                end
+            end)
+        end)
+    end
+
+    append(lines, "matching_row_count=" .. #matching_rows)
+    local row = matching_rows[1]
+    if row then
+        append(lines, "row_array_index=" .. record_value(row.index))
+        append(lines, "row_inventory_index=" .. record_value(row.inventory_index))
+        append(lines, "row_name=" .. record_value(row.name))
+    end
+
+    local form_name = plain_text(safe("read hovered form FullName", function()
+        return hovered_form.FullName
+    end))
+    local form_id = plain_text(safe("read hovered form ID", function()
+        return hovered_form:GetHexFormID()
+    end))
+    local enchanted = safe("read enchanted-object flag", function()
+        return hovered_form.bIsEnchantedObject
+    end)
+    local enchant_save_data = safe("read enchant save data", function()
+        return hovered_form.EnchantSaveData
+    end)
+    local source_form_id = nil
+    if is_valid_object(enchant_save_data) then
+        source_form_id = safe("read enchant source form ID", function()
+            return enchant_save_data.SourceFormID
+        end)
+    end
+
+    append(lines, "form_id=" .. record_value(form_id))
+    append(lines, "form_full_name=" .. record_value(form_name))
+    append(lines, "is_enchanted_object=" .. record_value(enchanted))
+    append(lines, "enchant_save_data=" .. describe_object(enchant_save_data))
+    append(lines, "source_form_id=" .. record_value(source_form_id))
+
+    local saved_names = inspect_saved_name_map(form_name, row and row.name or nil)
+    append(lines, "saved_map_exact_key_count=" .. saved_names.exact_key_count)
+    append(lines, "saved_map_exact_key_value=" .. record_value(saved_names.exact_key_value))
+    append(lines, "saved_map_selected_value_count=" .. saved_names.selected_value_count)
+    for index, key in ipairs(saved_names.selected_value_keys) do
+        append(lines, string.format("saved_map_selected_value_key_%d=%s", index, record_value(key)))
+    end
+    append(lines, "result=complete")
+
+    local report_ok, report_error = write_lines(ITEM_PROBE_PATH, lines)
+    if not report_ok then
+        log("Could not write item probe report: " .. tostring(report_error))
+        notify("The item report could not be saved. No game data was changed.")
+        return
+    end
+    log("Wrote read-only item probe for " .. describe_object(hovered_form))
+    notify("Item inspected safely. No game data was changed; close the game and tell me.")
 end
 
 local function find_saved_name_target(selected_name)
@@ -217,14 +408,6 @@ local function mutate_saved_name(save_object, key, old_name, new_name)
     return true, nil
 end
 
-local function record_value(value)
-    local text = tostring(value or "")
-    text = string.gsub(text, "\\", "\\\\")
-    text = string.gsub(text, "\r", "\\r")
-    text = string.gsub(text, "\n", "\\n")
-    return text
-end
-
 local function write_undo_record(state, new_name, status)
     local file, open_error = io.open(UNDO_PATH, "w")
     if not file then
@@ -234,9 +417,12 @@ local function write_undo_record(state, new_name, status)
     file:write("Oblivion Renamer undo record\n")
     file:write("version=" .. MOD_VERSION .. "\n")
     file:write("status=" .. record_value(status) .. "\n")
+    file:write("entity_kind=" .. record_value(state.entity_kind) .. "\n")
     file:write("localization_key=" .. record_value(state.saved_key) .. "\n")
     file:write("old_name=" .. record_value(state.old_name) .. "\n")
     file:write("new_name=" .. record_value(new_name) .. "\n")
+    file:write("form_id=" .. record_value(state.form_id) .. "\n")
+    file:write("source_form_id=" .. record_value(state.source_form_id) .. "\n")
     file:write("inventory_index=" .. record_value(state.inventory_index) .. "\n")
     file:write("school=" .. record_value(state.school) .. "\n")
     file:write("type=" .. record_value(state.spell_type) .. "\n")
@@ -276,10 +462,10 @@ local function valid_new_name(name)
         return false, "The name field could not be read."
     end
     if string.find(name, "[\r\n]") then
-        return false, "Spell names cannot contain line breaks."
+        return false, "Names cannot contain line breaks."
     end
     if string.match(name, "^%s*$") then
-        return false, "Enter a spell name before confirming."
+        return false, "Enter a name before confirming."
     end
 
     local length = #name
@@ -290,17 +476,6 @@ local function valid_new_name(name)
         return false, string.format("Use %d characters or fewer.", MAX_NAME_LENGTH)
     end
     return true, nil
-end
-
-local function refresh_selected_spell(state, new_name)
-    if not state or not is_valid_object(state.magic_menu) or state.spell == nil then
-        return false
-    end
-    return safe("refresh selected spell", function()
-        state.spell.Name = FText(new_name)
-        state.magic_menu:SetCurrentSpellEquiped(state.spell)
-        return true
-    end) == true
 end
 
 local function commit_dialog()
@@ -317,7 +492,7 @@ local function commit_dialog()
     end
     if new_name == state.old_name then
         close_dialog("unchanged")
-        notify("The spell name was not changed.")
+        notify("The " .. state.entity_label .. " name was not changed.")
         return
     end
 
@@ -341,22 +516,18 @@ local function commit_dialog()
     end
 
     write_undo_record(state, new_name, "applied")
-    local refreshed = refresh_selected_spell(state, new_name)
     close_dialog("confirmed")
-    if refreshed then
-        notify("Renamed spell to: " .. new_name .. ". Save the game to keep it.")
-    else
-        notify("Spell renamed. Reopen Magic to refresh the list, then save the game.")
-    end
-    log(string.format("Renamed %s => %s (%s)", state.old_name, new_name, state.saved_key))
+    notify("Renamed " .. state.entity_label .. " to: " .. new_name .. ". Save the game to keep it.")
+    log(string.format("Renamed %s %s => %s (%s)", state.entity_label, state.old_name, new_name, state.saved_key))
 end
 
 local function cancel_dialog()
     if not active_dialog then
         return
     end
+    local entity_label = active_dialog.entity_label
     close_dialog("cancelled")
-    notify("Spell rename cancelled.")
+    notify(entity_label .. " rename cancelled.")
 end
 
 local function hook_context_object(context)
@@ -492,7 +663,7 @@ local function set_up_text_edit_widget(state)
 
     if is_valid_object(prompt) then
         safe("set rename prompt", function()
-            prompt:SetText(FText("Rename custom spell"))
+            prompt:SetText(FText(state.prompt))
         end)
     end
     safe("set current spell name", function()
@@ -513,9 +684,9 @@ local function set_up_text_edit_widget(state)
     return true
 end
 
-local function open_rename_dialog()
+local function open_spell_rename_dialog()
     if active_dialog then
-        notify("A spell rename is already open.")
+        notify("A rename is already open.")
         return
     end
 
@@ -569,8 +740,9 @@ local function open_rename_dialog()
     local state = {
         widget = widget,
         text_field = nil,
-        magic_menu = magic_menu,
-        spell = spell,
+        entity_kind = "custom-spell",
+        entity_label = "spell",
+        prompt = "Rename custom spell",
         save_object = target.save_object,
         saved_key = target.key,
         old_name = selected_name,
@@ -596,8 +768,19 @@ local function open_rename_dialog()
     log("Opened the native rename dialog for: " .. selected_name)
 end
 
+local function handle_rename_key()
+    local page = get_visible_player_menu_page()
+    if page == MAGIC_MENU_PAGE then
+        open_spell_rename_dialog()
+    elseif page == INVENTORY_MENU_PAGE then
+        probe_highlighted_inventory_item()
+    else
+        notify("Open Magic or Inventory, highlight a custom creation, then press F2.")
+    end
+end
+
 RegisterKeyBind(Key.F2, function()
-    ExecuteInGameThread(open_rename_dialog)
+    ExecuteInGameThread(handle_rename_key)
 end)
 
 RegisterKeyBind(Key.RETURN, function()
@@ -612,4 +795,4 @@ RegisterKeyBind(Key.ESCAPE, function()
     end
 end)
 
-log("Loaded " .. MOD_VERSION .. ". Highlight a custom spell in Magic and press F2.")
+log("Loaded " .. MOD_VERSION .. ". F2 renames custom spells and safely inspects enchanted items.")

@@ -14,7 +14,7 @@ remove the spell record.
 3. Reject records that are not player-created or are otherwise unsafe.
 4. Open an Unreal text-entry widget and validate the requested name.
 5. Persist the new name through the game's legacy/Unreal bridge.
-6. Refresh the menu and verify that the new name resolves to the same record.
+6. Verify that the new name resolves to the same saved-name key.
 7. Migrate matching Spell Hotkeys metadata or tell the user to rebind it.
 8. Write an undo record containing the stable identity and original name.
 
@@ -36,5 +36,10 @@ The F2 handler resolves the selected visible spell name to exactly one entry in
 replacement value must first be constructed with `FText(...)`. It loads the
 game's own `WBP_LegacyMenu_TextEdit`, focuses its editable field, and connects
 the native OK and Back actions to confirm/cancel. Confirmation updates only
-that map value, refreshes the selected spell row when possible, and records the
-old value in `undo/last-rename.txt`.
+that map value and records the old value in `undo/last-rename.txt`.
+
+On the Inventory page, the current development build performs read-only
+discovery. It correlates the hovered `UTESForm`, the matching
+`FOriginalInventoryMenuItemProperties` row, `UVEnchantSaveData`, and the saved
+custom-name map. Item mutation remains disabled until those identities have
+been verified in the target runtime.
