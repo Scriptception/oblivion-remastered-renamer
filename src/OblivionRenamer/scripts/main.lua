@@ -1,22 +1,21 @@
 local MOD_NAME = "[OblivionRenamer]"
-local OUTPUT_PATH = "ue4ss/Mods/OblivionRenamer/diagnostics/latest.txt"
+local MOD_VERSION = "0.1.0-dev"
 local MAGIC_MENU_PAGE = 2
-local PROBE_VERSION = "0.0.4"
+local MAX_NAME_LENGTH = 80
 
-local KNOWN_RECORD_CLASSES = {
-    "TESMagicItemForm",
-    "TESMagicItemObject",
-    "SpellItem",
-    "MagicItem",
-    "MagicItemObject",
-}
+local TEXT_EDIT_ASSET = "/Game/UI/Legacy/ModalLayer/WBP_LegacyMenu_TextEdit"
+local TEXT_EDIT_CLASS = TEXT_EDIT_ASSET .. ".WBP_LegacyMenu_TextEdit_C"
+local OK_HOOK = TEXT_EDIT_CLASS .. ":OnOkButtonClicked"
+local BACK_HOOK = TEXT_EDIT_CLASS .. ":OnBackButtonClicked"
+local UNDO_PATH = "ue4ss/Mods/OblivionRenamer/undo/last-rename.txt"
+
+local UEHelpers = require("UEHelpers")
+
+local active_dialog = nil
+local hooks_registered = false
 
 local function log(message)
     print(string.format("%s %s\n", MOD_NAME, message))
-end
-
-local function append(lines, value)
-    table.insert(lines, tostring(value))
 end
 
 local function safe(label, callback)
@@ -35,6 +34,19 @@ local function is_valid_object(value)
     return safe("object validity", function()
         return value:IsValid()
     end) == true
+end
+
+local function same_object(left, right)
+    if not is_valid_object(left) or not is_valid_object(right) then
+        return false
+    end
+    local left_address = safe("left object address", function()
+        return left:GetAddress()
+    end)
+    local right_address = safe("right object address", function()
+        return right:GetAddress()
+    end)
+    return left_address ~= nil and left_address == right_address
 end
 
 local function find_first_valid(short_class_name)
@@ -63,7 +75,7 @@ local function notify(message)
     safe("notification", function()
         model:AddNotification({
             Text = FText(message),
-            ShowSeconds = 4,
+            ShowSeconds = 5,
             Icon = nil,
             bIsQuest = false,
         })
@@ -80,33 +92,15 @@ local function plain_text(value)
     if type(value) ~= "userdata" then
         return tostring(value)
     end
-
     return safe("value ToString", function()
         return value:ToString()
     end)
 end
 
-local function describe_object(object)
-    if not is_valid_object(object) then
-        return "<null UObject>"
-    end
-
-    local full_name = safe("object full name", function()
-        return object:GetFullName()
-    end) or "<unknown>"
-    local address = safe("object address", function()
-        return object:GetAddress()
-    end)
-    if address then
-        return string.format("%s (address=0x%X)", full_name, address)
-    end
-    return full_name
-end
-
-local function magic_menu_is_open()
+local function get_magic_menu()
     local player_menu = find_first_valid("VPlayerMenuViewModel")
     if not player_menu then
-        return false
+        return nil
     end
 
     local visible = safe("player menu visibility", function()
@@ -115,257 +109,432 @@ local function magic_menu_is_open()
     local page = safe("player menu page", function()
         return player_menu:GetCurrentPage()
     end)
-    return visible == true and page == MAGIC_MENU_PAGE
-end
-
-local function dump_selected_spell(lines, spell)
-    append(lines, "")
-    append(lines, "== Selected spell row ==")
-    local known_fields = {
-        "Name", "Property", "Icon", "Category", "Type", "IsEquiped", "InventoryIndex", "School",
-        "EffectValue", "CannotCastReason", "bIsImmuneToSilence", "Count", "bIsFavorite"
-    }
-    for _, field in ipairs(known_fields) do
-        local value = safe("spell field " .. field, function()
-            return spell[field]
-        end)
-        local text = plain_text(value)
-        if text == nil then
-            text = tostring(value)
-        end
-        append(lines, string.format("%s: %s", field, text))
+    if visible ~= true or page ~= MAGIC_MENU_PAGE then
+        return nil
     end
+    return find_first_valid("VMagicMenuViewModel")
 end
 
-local function dump_user_input_map(lines, selected_name)
-    append(lines, "")
-    append(lines, "== UserInputTextSaveData maps ==")
-    local matching_keys = {}
+local function find_saved_name_target(selected_name)
+    local result = {
+        count = 0,
+        save_object = nil,
+        key = nil,
+    }
     local objects = safe("FindAllOf UserInputTextSaveData", function()
         return FindAllOf("UserInputTextSaveData")
     end)
     if not objects then
-        append(lines, "No UserInputTextSaveData instances were found.")
-        return matching_keys
+        return result
     end
 
-    append(lines, "instance-count: " .. tostring(#objects))
-    for object_index, object in ipairs(objects) do
+    for _, object in ipairs(objects) do
         if is_valid_object(object) then
-            append(lines, "")
-            append(lines, string.format("instance[%d]: %s", object_index, describe_object(object)))
             local map = safe("read UserInputTextsMap", function()
                 return object.UserInputTextsMap
             end)
             if map then
-                local entry_count = 0
-                local map_ok = safe("iterate UserInputTextsMap", function()
+                safe("scan UserInputTextsMap", function()
                     map:ForEach(function(key_param, value_param)
-                        local key = key_param:get()
-                        local value = value_param:get()
-                        local key_text = plain_text(key) or tostring(key)
-                        local value_text = plain_text(value) or tostring(value)
-                        local marker = ""
-                        if value_text == selected_name then
-                            marker = "  <== SELECTED SPELL NAME"
-                            matching_keys[key_text] = true
+                        local key = plain_text(key_param:get())
+                        local value = plain_text(value_param:get())
+                        if key and value == selected_name then
+                            result.count = result.count + 1
+                            result.save_object = object
+                            result.key = key
                         end
-                        append(lines, string.format("  %s => %s%s", key_text, value_text, marker))
-                        entry_count = entry_count + 1
                     end)
-                    return true
                 end)
-                append(lines, "entry-count: " .. tostring(entry_count))
-                if not map_ok then
-                    append(lines, "Map iteration was unavailable through this UE4SS build.")
-                end
-            else
-                append(lines, "UserInputTextsMap could not be read.")
             end
         end
     end
-    return matching_keys
+    return result
 end
 
-local function class_has_full_name_property(class)
-    local current = class
-    local depth = 0
-    while is_valid_object(current) and depth < 16 do
-        local found = false
-        safe("inspect class properties", function()
-            current:ForEachProperty(function(property)
-                if property:GetFName():ToString() == "FullName" then
-                    found = true
-                    return true
-                end
-            end)
-        end)
-        if found then
-            return true
-        end
-        current = safe("inspect superclass", function()
-            return current:GetSuperStruct()
-        end)
-        depth = depth + 1
-    end
-    return false
-end
-
-local function discover_record_classes(lines)
-    local class_names = {}
-    for _, name in ipairs(KNOWN_RECORD_CLASSES) do
-        class_names[name] = true
+local function mutate_saved_name(save_object, key, old_name, new_name)
+    if not is_valid_object(save_object) then
+        return false, "The saved-name object is no longer available."
     end
 
-    append(lines, "")
-    append(lines, "== Relevant loaded Altar classes ==")
-    ForEachUObject(function(object)
-        local full_name = safe("registry object name", function()
-            return object:GetFullName()
-        end) or ""
-        local lower = string.lower(full_name)
-        if string.find(lower, "class /script/altar.", 1, true) == 1
-            and (string.find(lower, "spell", 1, true)
-                or string.find(lower, "magicitem", 1, true)
-                or string.find(lower, "userinputtext", 1, true))
-        then
-            append(lines, full_name)
-            local short_name = safe("class short name", function()
-                return object:GetFName():ToString()
-            end)
-            local short_lower = string.lower(short_name or "")
-            if short_name and class_has_full_name_property(object)
-                and not string.find(short_lower, "viewmodel", 1, true)
-                and not string.find(short_lower, "widget", 1, true)
-                and not string.find(short_lower, "anim", 1, true)
-                and not string.find(short_lower, "projectile", 1, true)
-                and not string.find(short_lower, "vfx", 1, true)
-            then
-                class_names[short_name] = true
+    local map = safe("read saved-name map for rename", function()
+        return save_object.UserInputTextsMap
+    end)
+    if not map then
+        return false, "The saved-name map is no longer available."
+    end
+
+    local matching_entries = 0
+    local changed_entries = 0
+    local iteration_ok = safe("update saved-name map", function()
+        map:ForEach(function(key_param, value_param)
+            local current_key = plain_text(key_param:get())
+            local current_value = plain_text(value_param:get())
+            if current_key == key and current_value == old_name then
+                matching_entries = matching_entries + 1
+                value_param:set(new_name)
+                changed_entries = changed_entries + 1
             end
-        end
+        end)
+        return true
     end)
-    return class_names
+
+    if not iteration_ok then
+        return false, "The saved-name map could not be updated."
+    end
+    if matching_entries ~= 1 or changed_entries ~= 1 then
+        return false, "The original saved name changed before confirmation."
+    end
+    return true, nil
 end
 
-local function read_record_field(object, field)
-    return safe("record field " .. field, function()
-        return object:GetPropertyValue(field)
+local function record_value(value)
+    local text = tostring(value or "")
+    text = string.gsub(text, "\\", "\\\\")
+    text = string.gsub(text, "\r", "\\r")
+    text = string.gsub(text, "\n", "\\n")
+    return text
+end
+
+local function write_undo_record(state, new_name, status)
+    local file, open_error = io.open(UNDO_PATH, "w")
+    if not file then
+        return false, tostring(open_error)
+    end
+
+    file:write("Oblivion Renamer undo record\n")
+    file:write("version=" .. MOD_VERSION .. "\n")
+    file:write("status=" .. record_value(status) .. "\n")
+    file:write("localization_key=" .. record_value(state.saved_key) .. "\n")
+    file:write("old_name=" .. record_value(state.old_name) .. "\n")
+    file:write("new_name=" .. record_value(new_name) .. "\n")
+    file:write("inventory_index=" .. record_value(state.inventory_index) .. "\n")
+    file:write("school=" .. record_value(state.school) .. "\n")
+    file:write("type=" .. record_value(state.spell_type) .. "\n")
+    file:close()
+    return true, nil
+end
+
+local function get_dialog_text(state)
+    if not state or not is_valid_object(state.text_field) then
+        return nil
+    end
+    return safe("read rename text", function()
+        return state.text_field:GetText():ToString()
     end)
 end
 
-local function record_matches(full_name, selected_name, matching_keys)
-    if not full_name then
+local function close_dialog(reason)
+    local state = active_dialog
+    active_dialog = nil
+    if not state then
+        return
+    end
+
+    if is_valid_object(state.widget) then
+        safe("deactivate rename dialog", function()
+            state.widget:DeactivateWidget()
+        end)
+        safe("remove rename dialog", function()
+            state.widget:RemoveFromParent()
+        end)
+    end
+    log("Rename dialog closed: " .. tostring(reason))
+end
+
+local function valid_new_name(name)
+    if name == nil then
+        return false, "The name field could not be read."
+    end
+    if string.find(name, "[\r\n]") then
+        return false, "Spell names cannot contain line breaks."
+    end
+    if string.match(name, "^%s*$") then
+        return false, "Enter a spell name before confirming."
+    end
+
+    local length = #name
+    if utf8 and utf8.len then
+        length = utf8.len(name) or length
+    end
+    if length > MAX_NAME_LENGTH then
+        return false, string.format("Use %d characters or fewer.", MAX_NAME_LENGTH)
+    end
+    return true, nil
+end
+
+local function refresh_selected_spell(state, new_name)
+    if not state or not is_valid_object(state.magic_menu) or state.spell == nil then
         return false
     end
-    if full_name == selected_name or matching_keys[full_name] then
+    return safe("refresh selected spell", function()
+        state.spell.Name = FText(new_name)
+        state.magic_menu:SetCurrentSpellEquiped(state.spell)
+        return true
+    end) == true
+end
+
+local function commit_dialog()
+    local state = active_dialog
+    if not state then
+        return
+    end
+
+    local new_name = get_dialog_text(state)
+    local name_ok, name_error = valid_new_name(new_name)
+    if not name_ok then
+        notify(name_error)
+        return
+    end
+    if new_name == state.old_name then
+        close_dialog("unchanged")
+        notify("The spell name was not changed.")
+        return
+    end
+
+    local undo_ok, undo_error = write_undo_record(state, new_name, "pending")
+    if not undo_ok then
+        notify("Rename cancelled: the safety record could not be written.")
+        log("Could not create undo record: " .. tostring(undo_error))
+        return
+    end
+
+    local changed, change_error = mutate_saved_name(
+        state.save_object,
+        state.saved_key,
+        state.old_name,
+        new_name
+    )
+    if not changed then
+        write_undo_record(state, new_name, "not-applied")
+        notify("Rename cancelled: " .. tostring(change_error))
+        return
+    end
+
+    write_undo_record(state, new_name, "applied")
+    local refreshed = refresh_selected_spell(state, new_name)
+    close_dialog("confirmed")
+    if refreshed then
+        notify("Renamed spell to: " .. new_name .. ". Save the game to keep it.")
+    else
+        notify("Spell renamed. Reopen Magic to refresh the list, then save the game.")
+    end
+    log(string.format("Renamed %s => %s (%s)", state.old_name, new_name, state.saved_key))
+end
+
+local function cancel_dialog()
+    if not active_dialog then
+        return
+    end
+    close_dialog("cancelled")
+    notify("Spell rename cancelled.")
+end
+
+local function hook_context_object(context)
+    if context == nil then
+        return nil
+    end
+    return safe("hook context", function()
+        return context:get()
+    end)
+end
+
+local function ensure_dialog_hooks()
+    if hooks_registered then
         return true
     end
-    return string.find(full_name, "UI_UserInputText", 1, true) ~= nil
-end
 
-local function dump_record_instances(lines, class_names, selected_name, matching_keys)
-    append(lines, "")
-    append(lines, "== Candidate legacy spell records ==")
-    local emitted = 0
-
-    for short_name, _ in pairs(class_names) do
-        local objects = safe("FindAllOf " .. short_name, function()
-            return FindAllOf(short_name)
+    local ok_registered = pcall(function()
+        RegisterHook(OK_HOOK, function(context)
+            local widget = hook_context_object(context)
+            if active_dialog and same_object(widget, active_dialog.widget) then
+                commit_dialog()
+            end
         end)
-        if objects then
-            local class_matches = 0
-            for _, object in ipairs(objects) do
-                if is_valid_object(object) then
-                    local full_name = plain_text(read_record_field(object, "FullName"))
-                    if record_matches(full_name, selected_name, matching_keys) then
-                        append(lines, "")
-                        append(lines, string.format("class=%s object=%s", short_name, describe_object(object)))
-                        append(lines, "FullName: " .. tostring(full_name))
-                        for _, field in ipairs({ "m_formID", "m_formEditorID", "m_formType", "m_formFlags" }) do
-                            local value = read_record_field(object, field)
-                            append(lines, string.format("%s: %s", field, plain_text(value) or tostring(value)))
-                        end
-                        local hex_id = safe("GetHexFormID", function()
-                            return object:GetHexFormID()
-                        end)
-                        append(lines, "GetHexFormID(): " .. tostring(plain_text(hex_id) or hex_id))
-                        if matching_keys[full_name] then
-                            append(lines, "MATCH: this record's FullName key resolves to the selected visible name.")
-                        end
-                        class_matches = class_matches + 1
-                        emitted = emitted + 1
-                    end
-                end
+        RegisterHook(BACK_HOOK, function(context)
+            local widget = hook_context_object(context)
+            if active_dialog and same_object(widget, active_dialog.widget) then
+                cancel_dialog()
             end
-            if class_matches > 0 then
-                append(lines, string.format("%s matching-record-count: %d", short_name, class_matches))
-            end
-        end
-    end
-
-    append(lines, "")
-    append(lines, "total-matching-records: " .. tostring(emitted))
-end
-
-local function write_report(lines)
-    local file, open_error = io.open(OUTPUT_PATH, "w")
-    if not file then
-        log("Could not open diagnostic output: " .. tostring(open_error))
-        notify("Localization probe could not open its diagnostic file. Check UE4SS.log.")
+        end)
+    end)
+    if not ok_registered then
+        log("Could not register the native text-edit button hooks.")
         return false
     end
 
-    file:write(table.concat(lines, "\n"))
-    file:write("\n")
-    file:close()
+    hooks_registered = true
     return true
 end
 
-local function run_localization_probe()
-    if not magic_menu_is_open() then
-        notify("Open the Magic menu, highlight a spell, then press F2.")
+local function load_text_edit_class()
+    safe("load native text-edit asset", function()
+        LoadAsset(TEXT_EDIT_ASSET)
+    end)
+    local class = safe("find native text-edit class", function()
+        return StaticFindObject(TEXT_EDIT_CLASS)
+    end)
+    if is_valid_object(class) then
+        return class
+    end
+    return nil
+end
+
+local function create_text_edit_widget(widget_class)
+    local player_controller = safe("get player controller", function()
+        return UEHelpers.GetPlayerController()
+    end)
+    if not is_valid_object(player_controller) then
+        return nil
+    end
+
+    local widget_library = safe("find WidgetBlueprintLibrary", function()
+        return StaticFindObject("/Script/UMG.Default__WidgetBlueprintLibrary")
+    end)
+    if not is_valid_object(widget_library) then
+        return nil
+    end
+
+    local widget = safe("create native text-edit widget", function()
+        return widget_library:Create(player_controller, widget_class, player_controller)
+    end)
+    if not is_valid_object(widget) then
+        return nil
+    end
+    return widget
+end
+
+local function set_up_text_edit_widget(state)
+    local prompt = safe("read text-edit prompt widget", function()
+        return state.widget.textedit_prompt
+    end)
+    local text_field = safe("read text-edit input widget", function()
+        return state.widget.textedit_text
+    end)
+    if not is_valid_object(text_field) then
+        return false
+    end
+    state.text_field = text_field
+
+    if is_valid_object(prompt) then
+        safe("set rename prompt", function()
+            prompt:SetText(FText("Rename custom spell"))
+        end)
+    end
+    safe("set current spell name", function()
+        text_field:SetText(FText(state.old_name))
+    end)
+    safe("add rename dialog to viewport", function()
+        state.widget:AddToViewport(10000)
+    end)
+    safe("activate rename dialog", function()
+        state.widget:ActivateWidget()
+    end)
+    safe("focus rename text field", function()
+        text_field:SetFocus()
+    end)
+    safe("give rename field keyboard focus", function()
+        text_field:SetKeyboardFocus()
+    end)
+    return true
+end
+
+local function open_rename_dialog()
+    if active_dialog then
+        notify("A spell rename is already open.")
         return
     end
 
-    local magic_menu = find_first_valid("VMagicMenuViewModel")
+    local magic_menu = get_magic_menu()
     if not magic_menu then
-        notify("Oblivion Renamer could not find the Magic menu view model.")
+        notify("Open Magic, highlight a custom spell, then press F2.")
         return
     end
 
-    local spell = safe("selected spell", function()
+    local spell = safe("read highlighted spell", function()
         return magic_menu:GetCurrentSpellEquiped()
     end)
-    if not spell then
+    if spell == nil then
         notify("No highlighted spell was found.")
         return
     end
-
-    local selected_name = safe("selected spell name", function()
+    local selected_name = safe("read highlighted spell name", function()
         return spell.Name:ToString()
     end)
     if not selected_name then
-        notify("The selected spell name could not be read.")
+        notify("The highlighted spell name could not be read.")
         return
     end
 
-    local lines = {}
-    append(lines, "Oblivion Renamer localization probe " .. PROBE_VERSION)
-    append(lines, "This probe is read-only. It does not modify maps, forms, game files, or save data.")
-    dump_selected_spell(lines, spell)
-    local matching_keys = dump_user_input_map(lines, selected_name)
-    local class_names = discover_record_classes(lines)
-    dump_record_instances(lines, class_names, selected_name, matching_keys)
-
-    if write_report(lines) then
-        log("Wrote localization probe for " .. selected_name .. " to " .. OUTPUT_PATH)
-        notify("Captured the saved-name mapping for: " .. selected_name)
+    local target = find_saved_name_target(selected_name)
+    if target.count == 0 then
+        notify("Only player-created spells can be renamed.")
+        return
     end
+    if target.count ~= 1 then
+        notify("This name is shared by multiple custom entries; rename cancelled for safety.")
+        return
+    end
+
+    local widget_class = load_text_edit_class()
+    if not widget_class then
+        notify("The in-game rename screen could not be loaded.")
+        return
+    end
+    if not ensure_dialog_hooks() then
+        notify("The in-game rename buttons could not be connected.")
+        return
+    end
+
+    local widget = create_text_edit_widget(widget_class)
+    if not widget then
+        notify("The in-game rename screen could not be created.")
+        return
+    end
+
+    local state = {
+        widget = widget,
+        text_field = nil,
+        magic_menu = magic_menu,
+        spell = spell,
+        save_object = target.save_object,
+        saved_key = target.key,
+        old_name = selected_name,
+        inventory_index = spell.InventoryIndex,
+        school = spell.School,
+        spell_type = spell.Type,
+    }
+    active_dialog = state
+    if not set_up_text_edit_widget(state) then
+        close_dialog("setup failed")
+        notify("The in-game name field could not be initialized.")
+        return
+    end
+
+    ExecuteWithDelay(100, function()
+        if active_dialog == state and is_valid_object(state.text_field) then
+            safe("restore rename field focus", function()
+                state.text_field:SetFocus()
+                state.text_field:SetKeyboardFocus()
+            end)
+        end
+    end)
+    log("Opened the native rename dialog for: " .. selected_name)
 end
 
 RegisterKeyBind(Key.F2, function()
-    ExecuteAsync(run_localization_probe)
+    ExecuteInGameThread(open_rename_dialog)
 end)
 
-log("Read-only localization probe loaded. Highlight a spell in the Magic menu and press F2.")
+RegisterKeyBind(Key.RETURN, function()
+    if active_dialog then
+        ExecuteInGameThread(commit_dialog)
+    end
+end)
+
+RegisterKeyBind(Key.ESCAPE, function()
+    if active_dialog then
+        ExecuteInGameThread(cancel_dialog)
+    end
+end)
+
+log("Loaded " .. MOD_VERSION .. ". Highlight a custom spell in Magic and press F2.")

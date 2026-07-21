@@ -2,9 +2,10 @@
 
 ## Safety boundary
 
-The probe and final mod run on UE4SS. No developer-console commands are used.
-The probe is read-only. A later mutating build must create an undo record and
-must verify the replacement record before removing or changing an old one.
+The mod runs on UE4SS. No developer-console commands are used. Before changing
+a saved name, the development build requires one exact custom-name match and
+writes an undo record. It changes the value in place and does not recreate or
+remove the spell record.
 
 ## Rename flow
 
@@ -27,12 +28,11 @@ MISS does not rewrite player-created spell or enchanted-item names, so it can
 coexist with this mod. Static sorting mods may still change built-in records;
 the renamer deliberately does not own those records.
 
-## Current probe
+## Current development build
 
-The localization probe correlates the selected visible spell name with
-`UserInputTextSaveData.UserInputTextsMap`, then searches the loaded legacy
-magic-item classes for a record whose `FullName` localization key resolves to
-that value. The previous registry probe established that `TESMagicItemForm` and
-`TESMagicItemObject` expose `FullName`, while the save-data object exposes the
-name map. The active probe remains read-only and does not invoke any creation,
-save, or map-mutation action.
+The F2 handler resolves the selected visible spell name to exactly one entry in
+`UserInputTextSaveData.UserInputTextsMap`. It loads the game's own
+`WBP_LegacyMenu_TextEdit`, focuses its editable field, and connects the native
+OK and Back actions to confirm/cancel. Confirmation updates only that map value,
+refreshes the selected spell row when possible, and records the old value in
+`undo/last-rename.txt`.

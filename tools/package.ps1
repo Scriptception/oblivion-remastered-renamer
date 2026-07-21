@@ -1,5 +1,5 @@
 param(
-    [string]$Version = '0.0.4-localization-probe'
+    [string]$Version = '0.1.0-native-dialog-dev'
 )
 
 $ErrorActionPreference = 'Stop'

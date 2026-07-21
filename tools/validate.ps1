@@ -26,5 +26,16 @@ foreach ($token in $forbidden) {
     }
 }
 
-Write-Host 'Validation passed: required files, F2 binding, and probe safety boundary.'
+foreach ($requiredToken in @(
+    'WBP_LegacyMenu_TextEdit',
+    'UserInputTextsMap',
+    'undo/last-rename.txt',
+    'RegisterHook(OK_HOOK',
+    'RegisterHook(BACK_HOOK'
+)) {
+    if (-not $source.Contains($requiredToken)) {
+        throw "Required native-dialog safety token was not found: $requiredToken"
+    }
+}
 
+Write-Host 'Validation passed: F2, native dialog, exact-map rename, undo record, and console safety boundary.'

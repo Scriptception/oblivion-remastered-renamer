@@ -5,15 +5,14 @@ Elder Scrolls IV: Oblivion Remastered**.
 
 ## Project status
 
-Pre-alpha. The current build is a focused, read-only localization probe. While
-the Magic menu is open, highlight a spell and press **F2**. The probe correlates
-the selected visible name with `UserInputTextSaveData`, its localization key,
-and candidate legacy spell records to:
+Pre-alpha. The current development build opens Oblivion's native in-game text
+entry screen when **F2** is pressed on a highlighted player-created spell. Type
+the new name and use **Enter/OK** to apply it or **Escape/Back** to cancel.
 
-`ue4ss/Mods/OblivionRenamer/diagnostics/latest.txt`
-
-It does not modify the localization map, selected spell, game files, or save
-data.
+The build changes only the matching entry in the game's saved custom-name map.
+It rejects built-in spells and any ambiguous duplicate-name match, writes an
+undo record before changing memory, and asks the player to make a normal game
+save after a successful rename.
 
 ## Target design
 
@@ -40,8 +39,9 @@ complete, achievement compatibility is not guaranteed.
 
 ## Safety
 
-Development builds must be tested against a backed-up save. The mutating
-renamer will not be enabled until the persistence path has been verified.
+Development builds must be tested against a backed-up save. The first mutating
+build uses the verified custom-name persistence path, but save/reload testing is
+still required before it is release-ready.
 
 ## License
 
