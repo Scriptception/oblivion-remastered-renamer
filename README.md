@@ -5,13 +5,15 @@ Elder Scrolls IV: Oblivion Remastered**.
 
 ## Project status
 
-Pre-alpha. The current build is a read-only reflection probe. While the Magic
-menu is open, highlight a spell and press **F2**. The probe records the
-selected spell and the relevant reflected Unreal functions to:
+Pre-alpha. The current build is a read-only bridge probe. While the Magic menu
+is open, highlight a spell and press **F2**. The probe records the selected
+spell, its underlying hovered form (when the game exposes one), reflected
+function signatures, and likely Altar rename/persistence APIs to:
 
 `ue4ss/Mods/OblivionRenamer/diagnostics/latest.txt`
 
-It does not modify the selected spell, game files, or save data.
+It does not invoke the UI's hover handlers or modify the selected spell, game
+files, or save data.
 
 ## Target design
 
@@ -44,4 +46,3 @@ renamer will not be enabled until the persistence path has been verified.
 ## License
 
 MIT. See [LICENSE](LICENSE).
-

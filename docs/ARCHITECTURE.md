@@ -29,8 +29,10 @@ the renamer deliberately does not own those records.
 
 ## Current probe
 
-The probe logs metadata for the selected spell value, `VMagicMenuViewModel`,
-`VPlayerMenuViewModel`, `VAltarUISubsystem`, and relevant loaded script
-structs. This establishes which reflected call writes through to the legacy
+The bridge probe logs the selected spell row, `InventoryHoveredObjectForm`,
+the returned object's class hierarchy, relevant property values, function
+signatures, and a bounded list of likely Altar persistence APIs. It deliberately
+does not invoke `RegisterSendItemHoverHandler`: the reflected signature is
+captured first, while the form already supplied by the live UI is read without
+mutation. This establishes which later call can write through to the legacy
 record and save rather than changing only a transient menu value.
-
