@@ -5,17 +5,15 @@ Elder Scrolls IV: Oblivion Remastered**.
 
 ## Project status
 
-Pre-alpha. The current build is a read-only registry probe. While the Magic menu
-is open, highlight a spell and press **F2**. The probe records the selected
-spell, its underlying hovered form (when the game exposes one), reflected
-function signatures, the game's existing spellmaking widget, and likely Altar
-rename/persistence APIs to:
+Pre-alpha. The current build is a focused, read-only localization probe. While
+the Magic menu is open, highlight a spell and press **F2**. The probe correlates
+the selected visible name with `UserInputTextSaveData`, its localization key,
+and candidate legacy spell records to:
 
 `ue4ss/Mods/OblivionRenamer/diagnostics/latest.txt`
 
-It loads the spellmaking UI asset for reflection, but does not display or invoke
-it. It does not invoke hover handlers or modify the selected spell, game files,
-or save data.
+It does not modify the localization map, selected spell, game files, or save
+data.
 
 ## Target design
 

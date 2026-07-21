@@ -29,11 +29,10 @@ the renamer deliberately does not own those records.
 
 ## Current probe
 
-The registry probe logs the selected spell row, `InventoryHoveredObjectForm`,
-stable function signatures, and a bounded list of likely Altar persistence
-APIs. The Magic menu does not populate its hovered-form bridge for spells, so
-the probe also loads the existing spellmaking widget for reflection and scans
-its classes/functions without displaying or invoking it. It deliberately does
-not invoke `RegisterSendItemHoverHandler` or any creation/save action. This
-establishes which later call can write through to the legacy record and save
-rather than changing only a transient menu value.
+The localization probe correlates the selected visible spell name with
+`UserInputTextSaveData.UserInputTextsMap`, then searches the loaded legacy
+magic-item classes for a record whose `FullName` localization key resolves to
+that value. The previous registry probe established that `TESMagicItemForm` and
+`TESMagicItemObject` expose `FullName`, while the save-data object exposes the
+name map. The active probe remains read-only and does not invoke any creation,
+save, or map-mutation action.

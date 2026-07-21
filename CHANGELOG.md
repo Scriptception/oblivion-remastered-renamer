@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.4-localization-probe
+
+- Added focused enumeration of `UserInputTextSaveData.UserInputTextsMap`.
+- Added correlation of a selected visible spell name to its saved localization
+  key.
+- Added discovery and inspection of candidate legacy spell-record instances,
+  including `FullName` and form identifiers.
+- Removed the slow full function-signature scan from the active F2 path.
+
 ## 0.0.3-registry-probe
 
 - Replaced the unavailable `FindAllOf("Class")` route with a bounded
