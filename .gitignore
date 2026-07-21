@@ -1,7 +1,5 @@
 /artifacts/
 /build/
 *.log
-src/OblivionRenamer/diagnostics/*.txt
-!src/OblivionRenamer/diagnostics/.gitkeep
 src/OblivionRenamer/undo/*.txt
 !src/OblivionRenamer/undo/.gitkeep

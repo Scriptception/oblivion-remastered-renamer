@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest an improvement within the custom-creation scope
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Oblivion Renamer intentionally supports only player-created spells and player-created named enchanted items.
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: What problem would this solve for custom creations?
+    validations:
+      required: true
+
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: safety
+    attributes:
+      label: Save-safety considerations
+      description: Describe any save-data, compatibility, or ambiguity risks you foresee.

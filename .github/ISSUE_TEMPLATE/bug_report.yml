@@ -1,0 +1,86 @@
+name: Bug report
+description: Report a reproducible Oblivion Renamer problem
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Back up your save before reproducing. Remove personal paths and character names from logs before posting them publicly.
+
+  - type: dropdown
+    id: distribution
+    attributes:
+      label: Game distribution
+      options:
+        - Xbox app / PC Game Pass (WinGDK)
+        - Steam (Win64, unsupported in v1.0.0)
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: game-version
+    attributes:
+      label: Game package or build version
+      placeholder: "For example: 1.0.12.0"
+    validations:
+      required: true
+
+  - type: input
+    id: ue4ss-version
+    attributes:
+      label: UE4SS version and Git SHA
+      placeholder: "For example: v3.0.1 Beta #0, 437a8ff"
+    validations:
+      required: true
+
+  - type: textarea
+    id: mods
+    attributes:
+      label: Other installed mods
+      description: Include UI, input, hotkey, and sorting mods.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Opened ...
+        2. Highlighted ...
+        3. Pressed F2 ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant UE4SS.log excerpt
+      render: text
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Safety confirmations
+      options:
+        - label: I backed up the save used for reproduction.
+          required: true
+        - label: I removed personal information from the report and logs.
+          required: true

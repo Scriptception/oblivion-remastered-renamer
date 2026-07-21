@@ -1,45 +1,69 @@
 # Architecture
 
-## Safety boundary
+## Runtime
 
-The mod runs on UE4SS. No developer-console commands are used. Before changing
-a saved name, the development build requires one exact custom-name match and
-writes an undo record. It changes the value in place and does not recreate or
-remove the spell record.
+Oblivion Renamer is a single UE4SS Lua mod. F2 dispatches according to the
+visible player-menu page:
 
-## Rename flow
+- Magic resolves the highlighted spell through `VMagicMenuViewModel`.
+- Inventory resolves `CurrentHoveredItem` from the active
+  `WBP_OriginalMenu_Inventory_C` widget and reads its item properties.
 
-1. Require the relevant inventory menu to be open.
-2. Resolve the currently highlighted entry from its view model.
-3. Reject records that are not player-created or are otherwise unsafe.
-4. Open an Unreal text-entry widget and validate the requested name.
-5. Persist the new name through the game's legacy/Unreal bridge.
-6. Verify that the new name resolves to the same saved-name key.
-7. Migrate matching Spell Hotkeys metadata or tell the user to rebind it.
-8. Write an undo record containing the stable identity and original name.
+The native `WBP_LegacyMenu_TextEdit` widget supplies the input screen. Hooks on
+its OK and Back actions commit or cancel the active rename.
 
-## Sorting and tag compatibility
+## Persistence
 
-The user-entered string remains the real inventory name, so alphabetical
-sorting naturally follows it. Prefixes such as `[Atk]`, `[Heal]`, or invisible
-sorting characters are preserved verbatim.
+Player-created names are stored in `UserInputTextSaveData.UserInputTextsMap`, a
+`TMap<FString, FText>`. The map key is never changed. The value is replaced with
+`TMap:Add(key, FText(new_name))`, then read back and compared before success is
+reported.
 
-MISS does not rewrite player-created spell or enchanted-item names, so it can
-coexist with this mod. Static sorting mods may still change built-in records;
-the renamer deliberately does not own those records.
+Passing a plain Lua string into this map's `FText` value slot is unsafe on the
+tested UE4SS build. Validation therefore requires explicit `FText` construction
+and rejects direct string writes.
 
-## Current development build
+## Identity and scope
 
-The F2 handler resolves the selected visible spell name to exactly one entry in
-`UserInputTextSaveData.UserInputTextsMap`. That property is
-`TMap<FString, FText>`: the key may be supplied from a Lua string, but every
-replacement value must first be constructed with `FText(...)`. It loads the
-game's own `WBP_LegacyMenu_TextEdit`, focuses its editable field, and connects
-the native OK and Back actions to confirm/cancel. Confirmation updates only
-that map value and records the old value in `undo/last-rename.txt`.
+### Spells
 
-On the Inventory page, the current development build performs read-only
-discovery. It correlates the hovered `UTESForm`, the matching
-`FOriginalInventoryMenuItemProperties` row, `UVEnchantSaveData`, and the saved
-custom-name map. Item mutation remains disabled until those identities have
-been verified in the target runtime.
+A spell is eligible only when its visible name maps to exactly one saved custom
+name entry. Built-in spells, powers, abilities, and ambiguous duplicate names
+are rejected.
+
+### Enchanted items
+
+An item must satisfy every guard below:
+
+1. It is the current entry in the active Inventory widget.
+2. `CurrentFormID` and `ObjectHoveredFormID` agree when both are available.
+3. `bIsEnchantedObject` is true.
+4. `EnchantSaveData` is valid and has a nonzero `SourceFormID`.
+5. Its form ID begins with `ff`, identifying a save-created dynamic form.
+6. Its `UI_UserInputText_*` key maps to one saved name entry, or its displayed
+   name maps to exactly one entry when the key string has already been resolved.
+
+The stable key is authoritative after a rename because the visible Inventory
+row can remain stale until the full player menu is reopened.
+
+## Transaction boundary
+
+The commit order is:
+
+1. Validate the requested name and check for conflicts.
+2. Write `undo/last-rename.txt` with `status=pending`.
+3. Revalidate that the original key/value pair still exists exactly once.
+4. Replace the value with a typed `FText`.
+5. Read the key back and compare it with the requested value.
+6. Attempt rollback if verification fails.
+7. Rewrite the recovery record with `status=applied`.
+
+No save command is issued. The player decides whether and when to create a
+normal game save.
+
+## Compatibility boundary
+
+The mod owns only the game's saved custom-name value. It does not modify built-in
+records, sorting-mod data, hotkey-mod data, executable code, or developer-console
+state. External mods that store names as identifiers may require rebinding after
+a rename.

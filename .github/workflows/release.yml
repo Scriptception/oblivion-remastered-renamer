@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Verify release tag
+        shell: pwsh
+        run: |
+          $version = (Get-Content -LiteralPath VERSION -Raw).Trim()
+          if ('${{ github.ref_name }}' -ne "v$version") {
+              throw "Tag ${{ github.ref_name }} does not match VERSION $version"
+          }
+
+      - name: Validate source contract
+        shell: pwsh
+        run: ./tools/validate.ps1
+
+      - name: Parse Lua syntax
+        shell: pwsh
+        run: npx --yes luaparse@0.3.1 ./src/OblivionRenamer/scripts/main.lua | Out-Null
+
+      - name: Check Lua formatting
+        shell: pwsh
+        run: npx --yes @johnnymorganz/stylua-bin@2.5.2 --check ./src/OblivionRenamer/scripts/main.lua
+
+      - name: Build and verify package
+        shell: pwsh
+        run: ./tools/package.ps1
+
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Get-Content -LiteralPath VERSION -Raw).Trim()
+          $assets = @(Get-ChildItem -LiteralPath build -File | Where-Object {
+              $_.Name -match '\.zip(?:\.sha256)?$'
+          })
+          if ($assets.Count -ne 2) {
+              throw "Expected a ZIP and checksum, found $($assets.Count) release assets."
+          }
+          $arguments = @(
+              'release', 'create', "v$version",
+              '--verify-tag',
+              '--title', "Oblivion Renamer $version",
+              '--generate-notes'
+          )
+          if ($version.Contains('-')) {
+              $arguments += '--prerelease'
+          }
+          $arguments += $assets.FullName
+          gh @arguments

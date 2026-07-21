@@ -1,5 +1,5 @@
 local MOD_NAME = "[OblivionRenamer]"
-local MOD_VERSION = "0.3.3-stale-row-dev"
+local MOD_VERSION = "1.0.0-rc.1"
 local INVENTORY_MENU_PAGE = 1
 local MAGIC_MENU_PAGE = 2
 local MAX_NAME_LENGTH = 80
@@ -10,12 +10,13 @@ local TEXT_EDIT_SHORT_CLASS = "WBP_LegacyMenu_TextEdit_C"
 local OK_HOOK = TEXT_EDIT_CLASS .. ":OnOkButtonClicked"
 local BACK_HOOK = TEXT_EDIT_CLASS .. ":OnBackButtonClicked"
 local UNDO_PATH = "ue4ss/Mods/OblivionRenamer/undo/last-rename.txt"
-local ITEM_PROBE_PATH = "ue4ss/Mods/OblivionRenamer/diagnostics/item-probe.txt"
+local SPELL_HOTKEYS_STATE_PATH = "ue4ss/Mods/SpellHotKeys/savestate.txt"
 
 local UEHelpers = require("UEHelpers")
 
 local active_dialog = nil
 local hooks_registered = false
+local cached_text_edit_class = nil
 
 local function log(message)
     print(string.format("%s %s\n", MOD_NAME, message))
@@ -50,6 +51,13 @@ local function same_object(left, right)
         return right:GetAddress()
     end)
     return left_address ~= nil and left_address == right_address
+end
+
+local function has_active_dialog()
+    if active_dialog and not is_valid_object(active_dialog.widget) then
+        active_dialog = nil
+    end
+    return active_dialog ~= nil
 end
 
 local function find_first_valid(short_class_name)
@@ -133,22 +141,6 @@ local function get_magic_menu()
     return find_first_valid("VMagicMenuViewModel")
 end
 
-local function append(lines, value)
-    lines[#lines + 1] = tostring(value or "")
-end
-
-local function write_lines(path, lines)
-    local file, open_error = io.open(path, "w")
-    if not file then
-        return false, tostring(open_error)
-    end
-    for _, line in ipairs(lines) do
-        file:write(line .. "\n")
-    end
-    file:close()
-    return true, nil
-end
-
 local function record_value(value)
     local text = tostring(value or "")
     text = string.gsub(text, "\\", "\\\\")
@@ -157,55 +149,19 @@ local function record_value(value)
     return text
 end
 
-local function inspect_saved_name_map(expected_key, selected_name)
-    local result = {
-        exact_key_count = 0,
-        exact_key_value = nil,
-        selected_value_count = 0,
-        selected_value_keys = {},
-    }
-    local objects = safe("FindAllOf UserInputTextSaveData for item probe", function()
-        return FindAllOf("UserInputTextSaveData")
-    end)
-    if not objects then
-        return result
+local function file_exists(path)
+    local file = io.open(path, "r")
+    if not file then
+        return false
     end
-
-    for _, object in ipairs(objects) do
-        if is_valid_object(object) then
-            local map = safe("read UserInputTextsMap for item probe", function()
-                return object.UserInputTextsMap
-            end)
-            if map then
-                safe("scan UserInputTextsMap for item probe", function()
-                    map:ForEach(function(key_param, value_param)
-                        local key = plain_text(key_param:get())
-                        local value = plain_text(value_param:get())
-                        if expected_key and key == expected_key then
-                            result.exact_key_count = result.exact_key_count + 1
-                            result.exact_key_value = value
-                        end
-                        if selected_name and value == selected_name then
-                            result.selected_value_count = result.selected_value_count + 1
-                            if #result.selected_value_keys < 10 then
-                                result.selected_value_keys[#result.selected_value_keys + 1] = key
-                            end
-                        end
-                    end)
-                end)
-            end
-        end
-    end
-    return result
+    file:close()
+    return true
 end
 
 local function get_hovered_inventory_selection()
     local result = {
-        candidate_count = 0,
-        widget = nil,
         hovered_item = nil,
         row = nil,
-        row_form = nil,
         current_form = nil,
         object_hovered_form = nil,
     }
@@ -226,9 +182,6 @@ local function get_hovered_inventory_selection()
                 local row = safe("read hovered inventory item properties", function()
                     return hovered_item:GetProperties()
                 end)
-                local row_form = safe("read hovered inventory item form", function()
-                    return row.form
-                end)
                 local current_form = safe("read inventory widget CurrentFormID", function()
                     return widget.CurrentFormID
                 end)
@@ -239,11 +192,9 @@ local function get_hovered_inventory_selection()
                     widget = widget,
                     hovered_item = hovered_item,
                     row = row,
-                    row_form = row_form,
                     current_form = current_form,
                     object_hovered_form = object_hovered_form,
                 }
-                result.candidate_count = result.candidate_count + 1
                 fallback = fallback or candidate
 
                 local in_viewport = safe("inventory widget viewport state", function()
@@ -258,122 +209,12 @@ local function get_hovered_inventory_selection()
     end
 
     if fallback then
-        result.widget = fallback.widget
         result.hovered_item = fallback.hovered_item
         result.row = fallback.row
-        result.row_form = fallback.row_form
         result.current_form = fallback.current_form
         result.object_hovered_form = fallback.object_hovered_form
     end
     return result
-end
-
-local function probe_highlighted_inventory_item(show_notification)
-    local function probe_notify(message)
-        if show_notification == true then
-            notify(message)
-        end
-    end
-
-    local lines = {
-        "Oblivion Renamer enchanted-item discovery report",
-        "version=" .. MOD_VERSION,
-        "read_only=true",
-    }
-
-    if get_visible_player_menu_page() ~= INVENTORY_MENU_PAGE then
-        append(lines, "result=inventory-not-open")
-        write_lines(ITEM_PROBE_PATH, lines)
-        probe_notify("Open Inventory, highlight a custom enchanted item, then press F2.")
-        return
-    end
-
-    local selection = get_hovered_inventory_selection()
-    append(lines, "inventory_widget_candidates=" .. selection.candidate_count)
-    append(lines, "inventory_widget=" .. describe_object(selection.widget))
-    append(lines, "current_hovered_item=" .. describe_object(selection.hovered_item))
-    append(lines, "row_form=" .. describe_object(selection.row_form))
-    append(lines, "current_form_id=" .. describe_object(selection.current_form))
-    append(lines, "object_hovered_form_id=" .. describe_object(selection.object_hovered_form))
-
-    local hovered_form = selection.row_form
-    if not is_valid_object(hovered_form) then
-        hovered_form = selection.current_form
-    end
-    if not is_valid_object(hovered_form) then
-        hovered_form = selection.object_hovered_form
-    end
-    append(lines, "hovered_form=" .. describe_object(hovered_form))
-    if not is_valid_object(hovered_form) then
-        append(lines, "result=hovered-form-missing")
-        write_lines(ITEM_PROBE_PATH, lines)
-        probe_notify("No highlighted inventory item was found.")
-        return
-    end
-
-    local matching_rows = {}
-    if selection.row ~= nil then
-        matching_rows[#matching_rows + 1] = {
-            index = "CurrentHoveredItem",
-            name = plain_text(safe("read hovered item name", function()
-                return selection.row.Name
-            end)),
-            inventory_index = safe("read hovered item inventory index", function()
-                return selection.row.InventoryIndex
-            end),
-        }
-    end
-
-    append(lines, "matching_row_count=" .. #matching_rows)
-    local row = matching_rows[1]
-    if row then
-        append(lines, "row_array_index=" .. record_value(row.index))
-        append(lines, "row_inventory_index=" .. record_value(row.inventory_index))
-        append(lines, "row_name=" .. record_value(row.name))
-    end
-
-    local form_name = plain_text(safe("read hovered form FullName", function()
-        return hovered_form.FullName
-    end))
-    local form_id = plain_text(safe("read hovered form ID", function()
-        return hovered_form:GetHexFormID()
-    end))
-    local enchanted = safe("read enchanted-object flag", function()
-        return hovered_form.bIsEnchantedObject
-    end)
-    local enchant_save_data = safe("read enchant save data", function()
-        return hovered_form.EnchantSaveData
-    end)
-    local source_form_id = nil
-    if is_valid_object(enchant_save_data) then
-        source_form_id = safe("read enchant source form ID", function()
-            return enchant_save_data.SourceFormID
-        end)
-    end
-
-    append(lines, "form_id=" .. record_value(form_id))
-    append(lines, "form_full_name=" .. record_value(form_name))
-    append(lines, "is_enchanted_object=" .. record_value(enchanted))
-    append(lines, "enchant_save_data=" .. describe_object(enchant_save_data))
-    append(lines, "source_form_id=" .. record_value(source_form_id))
-
-    local saved_names = inspect_saved_name_map(form_name, row and row.name or nil)
-    append(lines, "saved_map_exact_key_count=" .. saved_names.exact_key_count)
-    append(lines, "saved_map_exact_key_value=" .. record_value(saved_names.exact_key_value))
-    append(lines, "saved_map_selected_value_count=" .. saved_names.selected_value_count)
-    for index, key in ipairs(saved_names.selected_value_keys) do
-        append(lines, string.format("saved_map_selected_value_key_%d=%s", index, record_value(key)))
-    end
-    append(lines, "result=complete")
-
-    local report_ok, report_error = write_lines(ITEM_PROBE_PATH, lines)
-    if not report_ok then
-        log("Could not write item probe report: " .. tostring(report_error))
-        probe_notify("The item report could not be saved. No game data was changed.")
-        return
-    end
-    log("Wrote read-only item probe for " .. describe_object(hovered_form))
-    probe_notify("Item inspected safely. No game data was changed; close the game and tell me.")
 end
 
 local function find_saved_name_target(selected_name)
@@ -412,9 +253,8 @@ local function find_saved_name_target(selected_name)
     return result
 end
 
-local function find_saved_name_target_by_key(expected_key, expected_value)
+local function find_saved_name_target_by_key(expected_key)
     local result = {
-        count = 0,
         key_count = 0,
         save_object = nil,
         key = expected_key,
@@ -441,9 +281,6 @@ local function find_saved_name_target_by_key(expected_key, expected_value)
                             local value = plain_text(value_param:get())
                             result.save_object = object
                             result.current_value = value
-                            if value == expected_value then
-                                result.count = result.count + 1
-                            end
                         end
                     end)
                 end)
@@ -451,6 +288,46 @@ local function find_saved_name_target_by_key(expected_key, expected_value)
         end
     end
     return result
+end
+
+local function count_saved_name_conflicts(name, excluded_key)
+    local objects = safe("FindAllOf UserInputTextSaveData for conflict check", function()
+        return FindAllOf("UserInputTextSaveData")
+    end)
+    if not objects then
+        return nil
+    end
+
+    local unique_keys = {}
+    for _, object in ipairs(objects) do
+        if is_valid_object(object) then
+            local map = safe("read UserInputTextsMap for conflict check", function()
+                return object.UserInputTextsMap
+            end)
+            if not map then
+                return nil
+            end
+            local scan_ok = safe("scan UserInputTextsMap for conflict check", function()
+                map:ForEach(function(key_param, value_param)
+                    local key = plain_text(key_param:get())
+                    local value = plain_text(value_param:get())
+                    if key and key ~= excluded_key and value == name then
+                        unique_keys[key] = true
+                    end
+                end)
+                return true
+            end)
+            if not scan_ok then
+                return nil
+            end
+        end
+    end
+
+    local count = 0
+    for _ in pairs(unique_keys) do
+        count = count + 1
+    end
+    return count
 end
 
 local function get_selected_custom_item_target()
@@ -473,9 +350,11 @@ local function get_selected_custom_item_target()
         return nil, "The highlighted inventory entry could not be read."
     end
 
-    if is_valid_object(selection.current_form)
+    if
+        is_valid_object(selection.current_form)
         and is_valid_object(selection.object_hovered_form)
-        and not same_object(selection.current_form, selection.object_hovered_form) then
+        and not same_object(selection.current_form, selection.object_hovered_form)
+    then
         return nil, "The highlighted item changed; hover it again and retry."
     end
 
@@ -503,8 +382,12 @@ local function get_selected_custom_item_target()
     local source_form_id = safe("read selected item source form ID", function()
         return enchant_save_data.SourceFormID
     end)
-    if not form_id or string.sub(string.lower(form_id), 1, 2) ~= "ff"
-        or type(source_form_id) ~= "number" or source_form_id <= 0 then
+    if
+        not form_id
+        or string.sub(string.lower(form_id), 1, 2) ~= "ff"
+        or type(source_form_id) ~= "number"
+        or source_form_id <= 0
+    then
         return nil, "Only player-created enchanted items can be renamed."
     end
 
@@ -514,7 +397,7 @@ local function get_selected_custom_item_target()
     local target = nil
     local saved_key = nil
     if form_name and string.match(form_name, "^UI_UserInputText_") then
-        local keyed_target = find_saved_name_target_by_key(form_name, selected_name)
+        local keyed_target = find_saved_name_target_by_key(form_name)
         if keyed_target.key_count > 0 then
             if keyed_target.key_count ~= 1 or keyed_target.current_value == nil then
                 return nil, "The selected item's saved name is ambiguous; rename cancelled for safety."
@@ -522,10 +405,7 @@ local function get_selected_custom_item_target()
             target = keyed_target
             saved_key = form_name
             if selected_name ~= keyed_target.current_value then
-                log(
-                    "Inventory row name is stale; using current saved value: "
-                        .. keyed_target.current_value
-                )
+                log("Inventory row name is stale; using current saved value: " .. keyed_target.current_value)
                 selected_name = keyed_target.current_value
             end
         end
@@ -544,7 +424,7 @@ local function get_selected_custom_item_target()
         log("Resolved reloaded custom item through its unique saved-name value: " .. saved_key)
     end
 
-    return {
+    local state = {
         entity_kind = "custom-enchanted-item",
         entity_label = "item",
         entity_title = "Item",
@@ -556,7 +436,8 @@ local function get_selected_custom_item_target()
         form_id = form_id,
         source_form_id = source_form_id,
         inventory_index = inventory_index,
-    }, nil
+    }
+    return state, nil
 end
 
 local function mutate_saved_name(save_object, key, old_name, new_name)
@@ -593,7 +474,12 @@ local function mutate_saved_name(save_object, key, old_name, new_name)
     -- UserInputTextsMap is TMap<FString, FText>. UE4SS's TextProperty setter
     -- requires FText userdata; passing the Lua string directly makes the native
     -- pusher reinterpret it as FText and crashes before pcall can recover.
-    local replacement_text = FText(new_name)
+    local replacement_text = safe("construct replacement FText", function()
+        return FText(new_name)
+    end)
+    if replacement_text == nil then
+        return false, "The replacement text could not be created."
+    end
     local replace_ok = safe("replace saved-name map entry", function()
         map:Add(key, replacement_text)
         return true
@@ -606,10 +492,14 @@ local function mutate_saved_name(save_object, key, old_name, new_name)
         return plain_text(map:Find(key):get())
     end)
     if verified_name ~= new_name then
-        local original_text = FText(old_name)
-        safe("restore saved-name entry after failed verification", function()
-            map:Add(key, original_text)
+        local original_text = safe("construct rollback FText", function()
+            return FText(old_name)
         end)
+        if original_text ~= nil then
+            safe("restore saved-name entry after failed verification", function()
+                map:Add(key, original_text)
+            end)
+        end
         return false, "The saved-name replacement could not be verified."
     end
     return true, nil
@@ -668,8 +558,8 @@ local function valid_new_name(name)
     if name == nil then
         return false, "The name field could not be read."
     end
-    if string.find(name, "[\r\n]") then
-        return false, "Names cannot contain line breaks."
+    if string.find(name, "[%z\1-\31\127]") then
+        return false, "Names cannot contain control characters."
     end
     if string.match(name, "^%s*$") then
         return false, "Enter a name before confirming."
@@ -703,6 +593,16 @@ local function commit_dialog()
         return
     end
 
+    local conflict_count = count_saved_name_conflicts(new_name, state.saved_key)
+    if conflict_count == nil then
+        notify("Rename cancelled: saved-name conflicts could not be checked.")
+        return
+    end
+    if conflict_count > 0 then
+        notify("Another custom spell or item already uses that name.")
+        return
+    end
+
     local undo_ok, undo_error = write_undo_record(state, new_name, "pending")
     if not undo_ok then
         notify("Rename cancelled: the safety record could not be written.")
@@ -710,24 +610,23 @@ local function commit_dialog()
         return
     end
 
-    local changed, change_error = mutate_saved_name(
-        state.save_object,
-        state.saved_key,
-        state.old_name,
-        new_name
-    )
+    local changed, change_error = mutate_saved_name(state.save_object, state.saved_key, state.old_name, new_name)
     if not changed then
         write_undo_record(state, new_name, "not-applied")
         notify("Rename cancelled: " .. tostring(change_error))
         return
     end
 
-    write_undo_record(state, new_name, "applied")
+    local applied_record_ok, applied_record_error = write_undo_record(state, new_name, "applied")
+    if not applied_record_ok then
+        log("Could not finalize undo record: " .. tostring(applied_record_error))
+    end
     close_dialog("confirmed")
-    notify(
-        state.entity_title .. " renamed. " .. state.refresh_instruction
-            .. "; then save to keep it."
-    )
+    if state.entity_kind == "custom-spell" and file_exists(SPELL_HOTKEYS_STATE_PATH) then
+        notify("Spell renamed. Reopen Magic and save; then rebind it in Spell Hotkeys.")
+    else
+        notify(state.entity_title .. " renamed. " .. state.refresh_instruction .. "; then save to keep it.")
+    end
     log(string.format("Renamed %s %s => %s (%s)", state.entity_label, state.old_name, new_name, state.saved_key))
 end
 
@@ -754,7 +653,7 @@ local function ensure_dialog_hooks()
         return true
     end
 
-    local ok_registered = pcall(function()
+    local ok_registered, registration_error = pcall(function()
         RegisterHook(OK_HOOK, function(context)
             local widget = hook_context_object(context)
             if active_dialog and same_object(widget, active_dialog.widget) then
@@ -769,7 +668,7 @@ local function ensure_dialog_hooks()
         end)
     end)
     if not ok_registered then
-        log("Could not register the native text-edit button hooks.")
+        log("Could not register the native text-edit button hooks: " .. tostring(registration_error))
         return false
     end
 
@@ -778,6 +677,10 @@ local function ensure_dialog_hooks()
 end
 
 local function load_text_edit_class()
+    if is_valid_object(cached_text_edit_class) then
+        return cached_text_edit_class
+    end
+
     local object_path = TEXT_EDIT_ASSET .. ".WBP_LegacyMenu_TextEdit"
     local load_paths = {
         TEXT_EDIT_CLASS,
@@ -801,6 +704,7 @@ local function load_text_edit_class()
         end)
         if is_valid_object(direct) then
             log("Resolved native text-edit class directly: " .. describe_object(direct))
+            cached_text_edit_class = direct
             return direct
         end
 
@@ -809,6 +713,7 @@ local function load_text_edit_class()
         end)
         if is_valid_object(by_short_name) then
             log("Resolved native text-edit class by short name: " .. describe_object(by_short_name))
+            cached_text_edit_class = by_short_name
             return by_short_name
         end
     end
@@ -828,6 +733,7 @@ local function load_text_edit_class()
     end)
     if is_valid_object(discovered) then
         log("Resolved native text-edit class through the loaded-object registry: " .. describe_object(discovered))
+        cached_text_edit_class = discovered
         return discovered
     end
 
@@ -895,7 +801,7 @@ local function set_up_text_edit_widget(state)
 end
 
 local function present_rename_dialog(state)
-    if active_dialog then
+    if has_active_dialog() then
         notify("A rename is already open.")
         return false
     end
@@ -938,7 +844,7 @@ local function present_rename_dialog(state)
 end
 
 local function open_spell_rename_dialog()
-    if active_dialog then
+    if has_active_dialog() then
         notify("A rename is already open.")
         return
     end
@@ -991,14 +897,14 @@ local function open_spell_rename_dialog()
 end
 
 local function open_item_rename_dialog()
-    if active_dialog then
+    if has_active_dialog() then
         notify("A rename is already open.")
         return
     end
 
-    probe_highlighted_inventory_item(false)
     local state, target_error = get_selected_custom_item_target()
     if not state then
+        log("Item rename rejected: " .. tostring(target_error))
         notify(target_error)
         return
     end
@@ -1021,13 +927,13 @@ RegisterKeyBind(Key.F2, function()
 end)
 
 RegisterKeyBind(Key.RETURN, function()
-    if active_dialog then
+    if has_active_dialog() then
         ExecuteInGameThread(commit_dialog)
     end
 end)
 
 RegisterKeyBind(Key.ESCAPE, function()
-    if active_dialog then
+    if has_active_dialog() then
         ExecuteInGameThread(cancel_dialog)
     end
 end)

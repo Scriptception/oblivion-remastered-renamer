@@ -2,14 +2,24 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $main = Join-Path $repoRoot 'src\OblivionRenamer\scripts\main.lua'
 $enabled = Join-Path $repoRoot 'src\OblivionRenamer\enabled.txt'
+$versionFile = Join-Path $repoRoot 'VERSION'
 
-foreach ($required in @($main, $enabled)) {
+foreach ($required in @($main, $enabled, $versionFile)) {
     if (-not (Test-Path -LiteralPath $required)) {
         throw "Missing required file: $required"
     }
 }
 
 $source = Get-Content -LiteralPath $main -Raw
+$version = (Get-Content -LiteralPath $versionFile -Raw).Trim()
+if ($version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
+    throw "VERSION is not valid SemVer: $version"
+}
+$sourceVersionMatch = [regex]::Match($source, 'local MOD_VERSION = "([^"]+)"')
+if (-not $sourceVersionMatch.Success -or $sourceVersionMatch.Groups[1].Value -ne $version) {
+    throw "VERSION and main.lua MOD_VERSION do not match: $version"
+}
+
 if ($source -notmatch 'RegisterKeyBind\(Key\.F2') {
     throw 'F2 key binding was not found.'
 }
@@ -22,7 +32,7 @@ $forbidden = @(
 )
 foreach ($token in $forbidden) {
     if ($source.Contains($token)) {
-        throw "Forbidden API detected in probe: $token"
+        throw "Forbidden API detected in mod source: $token"
     }
 }
 
@@ -42,9 +52,11 @@ foreach ($unsafeTextWrite in @(
 foreach ($requiredToken in @(
     'WBP_LegacyMenu_TextEdit',
     'UserInputTextsMap',
-    'local replacement_text = FText(new_name)',
+    'local replacement_text = safe("construct replacement FText"',
+    'return FText(new_name)',
     'map:Add(key, replacement_text)',
-    'local original_text = FText(old_name)',
+    'local original_text = safe("construct rollback FText"',
+    'return FText(old_name)',
     'map:Add(key, original_text)',
     'map:Find(key)',
     'undo/last-rename.txt',
@@ -56,7 +68,7 @@ foreach ($requiredToken in @(
     }
 }
 
-foreach ($requiredProbeToken in @(
+foreach ($requiredItemToken in @(
     'INVENTORY_MENU_PAGE = 1',
     'WBP_OriginalMenu_Inventory_C',
     'CurrentHoveredItem',
@@ -64,8 +76,6 @@ foreach ($requiredProbeToken in @(
     'bIsEnchantedObject',
     'EnchantSaveData',
     'SourceFormID',
-    'diagnostics/item-probe.txt',
-    'read_only=true',
     'open_item_rename_dialog',
     'find_saved_name_target_by_key',
     'Inventory row name is stale; using current saved value',
@@ -75,8 +85,21 @@ foreach ($requiredProbeToken in @(
     'string.lower(form_id)',
     'entity_kind = "custom-enchanted-item"'
 )) {
-    if (-not $source.Contains($requiredProbeToken)) {
-        throw "Required read-only item probe token was not found: $requiredProbeToken"
+    if (-not $source.Contains($requiredItemToken)) {
+        throw "Required custom-item safety token was not found: $requiredItemToken"
+    }
+}
+
+foreach ($requiredHardeningToken in @(
+    'count_saved_name_conflicts',
+    'Names cannot contain control characters.',
+    'has_active_dialog',
+    'Could not finalize undo record',
+    'SPELL_HOTKEYS_STATE_PATH',
+    'rebind it in Spell Hotkeys'
+)) {
+    if (-not $source.Contains($requiredHardeningToken)) {
+        throw "Required release-hardening token was not found: $requiredHardeningToken"
     }
 }
 
@@ -93,4 +116,19 @@ if ($outsideMutationFunction.Contains('map:Add(')) {
     throw 'Saved-name map mutation was found outside the bounded rename function.'
 }
 
-Write-Host 'Validation passed: spell rename, typed FText map replacement, undo record, read-only item probe, and console safety boundary.'
+$parseErrors = @()
+foreach ($script in Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.ps1' -File) {
+    $tokens = $null
+    $errors = $null
+    [System.Management.Automation.Language.Parser]::ParseFile(
+        $script.FullName,
+        [ref]$tokens,
+        [ref]$errors
+    ) | Out-Null
+    $parseErrors += $errors
+}
+if ($parseErrors.Count -gt 0) {
+    throw "PowerShell syntax validation failed: $($parseErrors[0].Message)"
+}
+
+Write-Host 'Validation passed: custom spell/item guards, typed FText replacement, undo record, and console safety boundary.'

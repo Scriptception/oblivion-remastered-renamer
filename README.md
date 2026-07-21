@@ -1,52 +1,151 @@
 # Oblivion Renamer
 
-An in-game renamer for player-created spells and enchanted items in **The
-Elder Scrolls IV: Oblivion Remastered**.
+[![CI](https://github.com/Scriptception/oblivion-remastered-renamer/actions/workflows/ci.yml/badge.svg)](https://github.com/Scriptception/oblivion-remastered-renamer/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## Project status
+Rename player-created spells and player-created enchanted items from inside
+**The Elder Scrolls IV: Oblivion Remastered**. Highlight a supported creation,
+press **F2**, and enter its new name in the game's native text-entry screen.
 
-Pre-alpha. The current development build opens Oblivion's native in-game text
-entry screen when **F2** is pressed on a highlighted player-created spell. Type
-the new name and use **Enter/OK** to apply it or **Escape/Back** to cancel.
+The mod deliberately rejects built-in spells, ordinary equipment, quest
+records, and ambiguous matches. It changes only the matching value in the
+game's saved custom-name map.
 
-The build changes only the matching entry in the game's saved custom-name map.
-It rejects built-in spells and any ambiguous duplicate-name match, writes an
-undo record before changing memory, and asks the player to make a normal game
-save after a successful rename.
+## Features
 
-F2 on a highlighted Inventory entry currently runs a read-only identity probe
-for the enchanted-item implementation. It writes diagnostics only and cannot
-rename or otherwise alter an item in this build.
+- Renames player-created spells and named enchanted items.
+- Uses Oblivion's native in-game text-entry screen.
+- Persists through normal game saves and reloads.
+- Preserves prefixes, leading spaces, and sorting tags exactly as entered.
+- Handles Inventory rows that still display the previous name after a rename.
+- Writes a recovery record before every change.
+- Rejects duplicate target names, empty names, control characters, and names
+  longer than 80 Unicode characters.
+- Never invokes the developer console.
 
-## Target design
+## Requirements and support
 
-- Highlight a player-created spell or enchanted item and press F2.
-- Enter a new name in an in-game text field.
-- Persist the rename through save/load.
-- Reject built-in spells, powers, quest abilities, and unsafe records.
-- Record enough information to undo the last rename.
-- Preserve alphabetical sorting and user-supplied tags.
-- Integrate safely with Spell Hotkeys, Inventory Sorting Tags, and MISS.
+- A working [UE4SS](https://github.com/UE4SS-RE/RE-UE4SS) installation for
+  Oblivion Remastered.
+- Tested on the Xbox app / PC Game Pass `WinGDK` build, package version
+  `1.0.12.0`.
+- Tested with UE4SS `v3.0.1 Beta #0`, Git SHA `437a8ff`.
+- The Steam `Win64` build is not yet runtime-tested and is not claimed as
+  supported in v1.0.0.
 
-## Platforms
+The release was tested alongside FuzzUI - Interface Tweaks 2.0.0, Inventory
+Sorting Tags 1.5 Non-Deluxe, Press E To Confirm 1.0, Spell Hotkeys 1.2.5, and
+NL Tag Remover 1.3.3.
 
-- Primary target: Microsoft Store / Xbox app / PC Game Pass (`WinGDK`).
-- Planned: Steam (`Win64`) after the Game Pass implementation is stable.
-- Requires UE4SS for Oblivion Remastered.
-- Does not require OBSE64; official OBSE64 does not support Game Pass.
+## Installation
+
+1. Install and verify UE4SS for Oblivion Remastered.
+2. Close the game completely.
+3. Download `OblivionRenamer-1.0.0.zip` from
+   [Releases](https://github.com/Scriptception/oblivion-remastered-renamer/releases).
+4. Extract the ZIP into the directory containing the game's shipping
+   executable and existing `ue4ss` folder:
+   - Xbox app / Game Pass: `OblivionRemastered\Binaries\WinGDK`
+   - Steam, untested: `OblivionRemastered\Binaries\Win64`
+5. Confirm this file exists:
+   `ue4ss\Mods\OblivionRenamer\scripts\main.lua`.
+
+The final layout is:
+
+```text
+WinGDK
+`-- ue4ss
+    `-- Mods
+        `-- OblivionRenamer
+            |-- enabled.txt
+            |-- scripts
+            |   `-- main.lua
+            `-- undo
+```
+
+## Usage
+
+### Rename a custom spell
+
+1. Open **Magic** and highlight a player-created spell.
+2. Press **F2**.
+3. Enter the new name and choose **OK**, or choose **Back/Escape** to cancel.
+4. Reopen Magic if the list has not refreshed, then make a normal game save.
+
+If Spell Hotkeys is installed, rebind the renamed spell. Spell Hotkeys stores
+the displayed spell name in its own save state, and Oblivion Renamer does not
+rewrite another mod's private data.
+
+### Rename a custom enchanted item
+
+1. Open **Inventory** and highlight an item created and named at an enchanting
+   altar.
+2. Press **F2** and confirm the new name.
+3. Close the full player menu and reopen Inventory to refresh the displayed
+   row, then make a normal game save.
+
+The Inventory row may continue to show the previous name until the player menu
+is reopened. A second F2 press is still safe: the mod uses the current saved
+value associated with the item's stable key.
+
+## Safety and recovery
+
+Before changing a name, the mod writes:
+
+```text
+ue4ss\Mods\OblivionRenamer\undo\last-rename.txt
+```
+
+The record contains the stable saved-name key, old value, new value, record
+kind, and item identifiers when available. Only the most recent rename is
+retained. It is a recovery aid, not an automatic undo button.
+
+Renames remain in memory until the player makes a normal game save. Keep a
+backup save while evaluating any mod that changes save-backed data.
+
+## Compatibility notes
+
+- Sorting prefixes and tags are ordinary name text and are preserved.
+- New names already used by another custom spell or item are rejected to avoid
+  ambiguous future lookups.
+- Built-in content is intentionally outside this mod's scope; use a dedicated
+  sorting/tagging mod for ordinary records.
+- Game updates or different UE4SS builds may change reflected APIs. Include the
+  game build, UE4SS version, and `ue4ss\UE4SS.log` when reporting a problem.
 
 ## Achievements
 
-The mod does not open or execute the developer console. It is designed not to
-trigger the game's developer-mode achievement block. Until release testing is
-complete, achievement compatibility is not guaranteed.
+Oblivion Renamer does not execute the developer console or intentionally enable
+developer mode. Achievement behavior is ultimately controlled by the game,
+platform, and the user's wider UE4SS setup, so v1.0.0 does not guarantee
+achievement compatibility.
 
-## Safety
+## Updating and uninstalling
 
-Development builds must be tested against a backed-up save. The first mutating
-build uses the verified custom-name persistence path, but save/reload testing is
-still required before it is release-ready.
+Close the game before updating or uninstalling.
 
-## License
+- To update, replace `ue4ss\Mods\OblivionRenamer` with the new release folder.
+- To uninstall, remove that folder.
+- Names already persisted in a game save remain after uninstalling. Rename them
+  to the desired final values before removal if necessary.
 
-MIT. See [LICENSE](LICENSE).
+## Development
+
+Run the validation and packaging scripts from PowerShell:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\validate.ps1
+npx --yes luaparse@0.3.1 .\src\OblivionRenamer\scripts\main.lua > $null
+npx --yes @johnnymorganz/stylua-bin@2.5.2 --check .\src\OblivionRenamer\scripts\main.lua
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\package.ps1
+```
+
+See [Architecture](docs/ARCHITECTURE.md), [Testing](docs/TESTING.md), and
+[Contributing](CONTRIBUTING.md) for the release safety model.
+
+## License and disclaimer
+
+Source code is available under the [MIT License](LICENSE).
+
+This is an unofficial fan-made mod. It is not affiliated with or endorsed by
+Bethesda Softworks, Virtuos, Xbox, or Microsoft. No game assets are included.
