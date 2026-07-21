@@ -76,6 +76,10 @@ foreach ($requiredItemToken in @(
     'WBP_OriginalMenu_Inventory_C',
     'CurrentHoveredItem',
     'hovered_item:GetProperties()',
+    'read inventory widget focus state',
+    'focused_count == 1',
+    'Selected the focused Inventory widget',
+    'Inventory selection is still updating',
     'bIsEnchantedObject',
     'EnchantSaveData',
     'SourceFormID',
@@ -107,6 +111,8 @@ foreach ($requiredSpellToken in @(
 
 foreach ($requiredHardeningToken in @(
     'count_saved_name_conflicts',
+    'state.entity_kind == "custom-enchanted-item" and state.allow_shared_name == true',
+    'Shared-name check skipped because the highlighted item is bound to its exact saved-name key.',
     'Names cannot contain control characters.',
     'has_active_dialog',
     'Could not finalize undo record',

@@ -5,6 +5,25 @@ All notable changes to this project are documented here. The project follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-21
+
+### Added
+
+- Allow player-created enchanted items with exact saved-key identity to share
+  names with other custom items or spells.
+- Document native spell-identity research as future work rather than extending
+  v1.1.0 with an unsafe Lua heuristic.
+
+### Fixed
+
+- Prefer the focused Inventory widget after menu reopen, avoiding stale widget
+  instances that can expose the wrong underlying form.
+
+### Safety
+
+- Keep duplicate destination names blocked for spells and fallback item
+  resolution until the highlighted row can be bound to an exact saved key.
+
 ## [1.0.1] - 2026-07-21
 
 ### Fixed
@@ -37,6 +56,7 @@ All notable changes to this project are documented here. The project follows
 - Verify every replacement and attempt rollback if verification fails.
 - Never invoke the developer console or issue save commands.
 
-[Unreleased]: https://github.com/Scriptception/oblivion-remastered-renamer/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/Scriptception/oblivion-remastered-renamer/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/Scriptception/oblivion-remastered-renamer/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/Scriptception/oblivion-remastered-renamer/releases/tag/v1.0.1
 [1.0.0]: https://github.com/Scriptception/oblivion-remastered-renamer/releases/tag/v1.0.0

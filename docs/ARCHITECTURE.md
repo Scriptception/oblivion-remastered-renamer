@@ -10,6 +10,11 @@ visible player-menu page:
 - Inventory resolves `CurrentHoveredItem` from the active
   `WBP_OriginalMenu_Inventory_C` widget and reads its item properties.
 
+UE4SS can retain more than one valid Inventory widget across player-menu
+reopens. The resolver prefers the sole widget with focused descendants, then a
+sole viewport candidate. If several stale candidates remain and none owns
+focus, it rejects the request rather than inspecting an arbitrary widget.
+
 The native `WBP_LegacyMenu_TextEdit` widget supplies the input screen. Hooks on
 its OK and Back actions commit or cancel the active rename.
 
@@ -53,11 +58,17 @@ An item must satisfy every guard below:
 The stable key is authoritative after a rename because the visible Inventory
 row can remain stale until the full player menu is reopened.
 
+When the dynamic form exposes that stable key directly, the item may share a
+displayed name with another custom creation. Name uniqueness is not an identity
+requirement for that path. The visible-name fallback still requires a unique
+match and keeps the destination-name collision guard.
+
 ## Transaction boundary
 
 The commit order is:
 
-1. Validate the requested name and check for conflicts.
+1. Validate the requested name. Check for conflicts unless an enchanted item is
+   already bound directly to its stable saved-name key.
 2. Write `undo/last-rename.txt` with `status=pending`.
 3. Revalidate that the original key/value pair still exists exactly once.
 4. Replace the value with a typed `FText`.
