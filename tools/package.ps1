@@ -1,5 +1,5 @@
 param(
-    [string]$Version = '0.1.1-native-dialog-loader-dev'
+    [string]$Version = '0.1.2-safe-map-replace-dev'
 )
 
 $ErrorActionPreference = 'Stop'

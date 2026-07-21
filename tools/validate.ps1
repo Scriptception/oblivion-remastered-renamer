@@ -26,9 +26,15 @@ foreach ($token in $forbidden) {
     }
 }
 
+if ($source.Contains('value_param:set')) {
+    throw 'Unsafe in-place TMap FString mutation detected; use TMap:Add replacement.'
+}
+
 foreach ($requiredToken in @(
     'WBP_LegacyMenu_TextEdit',
     'UserInputTextsMap',
+    'map:Add(key, new_name)',
+    'map:Find(key)',
     'undo/last-rename.txt',
     'RegisterHook(OK_HOOK',
     'RegisterHook(BACK_HOOK'

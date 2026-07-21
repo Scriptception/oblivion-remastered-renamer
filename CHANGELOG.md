@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.2-dev
+
+- Replaced the crashing UE4SS 3.0.1a in-place `FString` map-value write with
+  `TMap:Add`, which replaces the existing key/value pair through the supported
+  map API.
+- Added a post-write lookup and rollback attempt if the replacement cannot be
+  verified.
+- Added validation that rejects the known-crashing `value_param:set` pattern.
+
+## 0.1.1-dev
+
+- Fixed discovery of the cooked native text-edit widget class.
+- Confirmed that the in-game dialog, keyboard entry, and OK action load.
+- Known failure: confirming a rename crashed while writing through the
+  temporary value parameter returned by `TMap:ForEach`; the undo record remained
+  at `status=pending` and the game was not saved.
+
 ## 0.0.4-localization-probe
 
 - Added focused enumeration of `UserInputTextSaveData.UserInputTextsMap`.

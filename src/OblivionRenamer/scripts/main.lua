@@ -1,5 +1,5 @@
 local MOD_NAME = "[OblivionRenamer]"
-local MOD_VERSION = "0.1.1-dev"
+local MOD_VERSION = "0.1.2-dev"
 local MAGIC_MENU_PAGE = 2
 local MAX_NAME_LENGTH = 80
 
@@ -174,15 +174,12 @@ local function mutate_saved_name(save_object, key, old_name, new_name)
     end
 
     local matching_entries = 0
-    local changed_entries = 0
-    local iteration_ok = safe("update saved-name map", function()
+    local iteration_ok = safe("verify saved-name map target", function()
         map:ForEach(function(key_param, value_param)
             local current_key = plain_text(key_param:get())
             local current_value = plain_text(value_param:get())
             if current_key == key and current_value == old_name then
                 matching_entries = matching_entries + 1
-                value_param:set(new_name)
-                changed_entries = changed_entries + 1
             end
         end)
         return true
@@ -191,8 +188,29 @@ local function mutate_saved_name(save_object, key, old_name, new_name)
     if not iteration_ok then
         return false, "The saved-name map could not be updated."
     end
-    if matching_entries ~= 1 or changed_entries ~= 1 then
+    if matching_entries ~= 1 then
         return false, "The original saved name changed before confirmation."
+    end
+
+    -- Never write through the LocalUnrealParam yielded by TMap:ForEach here.
+    -- UE4SS 3.0.1a crashed in its FString setter on this game. TMap:Add is the
+    -- supported replacement operation and does not retain that temporary value.
+    local replace_ok = safe("replace saved-name map entry", function()
+        map:Add(key, new_name)
+        return true
+    end)
+    if not replace_ok then
+        return false, "The saved-name entry could not be replaced."
+    end
+
+    local verified_name = safe("verify replaced saved-name entry", function()
+        return plain_text(map:Find(key):get())
+    end)
+    if verified_name ~= new_name then
+        safe("restore saved-name entry after failed verification", function()
+            map:Add(key, old_name)
+        end)
+        return false, "The saved-name replacement could not be verified."
     end
     return true, nil
 end
