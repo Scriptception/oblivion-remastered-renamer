@@ -12,6 +12,13 @@ The mod deliberately rejects built-in spells, ordinary equipment, quest
 records, and ambiguous matches. It changes only the matching value in the
 game's saved custom-name map.
 
+## Downloads
+
+- [Nexus Mods](https://www.nexusmods.com/oblivionremastered/mods/5563) for the
+  public mod page and end-user downloads.
+- [GitHub Releases](https://github.com/Scriptception/oblivion-remastered-renamer/releases)
+  for matching release archives, checksums, and source history.
+
 ## Features
 
 - Renames player-created spells and named enchanted items.
@@ -28,8 +35,8 @@ game's saved custom-name map.
 
 ## Requirements and support
 
-- A working [UE4SS](https://github.com/UE4SS-RE/RE-UE4SS) installation for
-  Oblivion Remastered.
+- A working [UE4SS for OblivionRemastered](https://www.nexusmods.com/oblivionremastered/mods/32)
+  installation.
 - Tested on the Xbox app / PC Game Pass `WinGDK` build, package version
   `1.0.12.0`.
 - Tested with UE4SS `v3.0.1 Beta #0`, Git SHA `437a8ff`.
@@ -45,7 +52,8 @@ NL Tag Remover 1.3.3.
 1. Install and verify UE4SS for Oblivion Remastered.
 2. Close the game completely.
 3. Download the latest `OblivionRenamer-<version>.zip` from
-   [Releases](https://github.com/Scriptception/oblivion-remastered-renamer/releases).
+   [Nexus Mods](https://www.nexusmods.com/oblivionremastered/mods/5563?tab=files)
+   or [GitHub Releases](https://github.com/Scriptception/oblivion-remastered-renamer/releases).
 4. Extract the ZIP into the directory containing the game's shipping
    executable and existing `ue4ss` folder:
    - Xbox app / Game Pass: `OblivionRemastered\Binaries\WinGDK`
