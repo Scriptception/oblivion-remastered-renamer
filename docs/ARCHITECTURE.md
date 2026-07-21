@@ -29,10 +29,11 @@ the renamer deliberately does not own those records.
 
 ## Current probe
 
-The bridge probe logs the selected spell row, `InventoryHoveredObjectForm`,
-the returned object's class hierarchy, relevant property values, function
-signatures, and a bounded list of likely Altar persistence APIs. It deliberately
-does not invoke `RegisterSendItemHoverHandler`: the reflected signature is
-captured first, while the form already supplied by the live UI is read without
-mutation. This establishes which later call can write through to the legacy
-record and save rather than changing only a transient menu value.
+The registry probe logs the selected spell row, `InventoryHoveredObjectForm`,
+stable function signatures, and a bounded list of likely Altar persistence
+APIs. The Magic menu does not populate its hovered-form bridge for spells, so
+the probe also loads the existing spellmaking widget for reflection and scans
+its classes/functions without displaying or invoking it. It deliberately does
+not invoke `RegisterSendItemHoverHandler` or any creation/save action. This
+establishes which later call can write through to the legacy record and save
+rather than changing only a transient menu value.

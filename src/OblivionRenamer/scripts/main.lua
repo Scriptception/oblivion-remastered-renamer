@@ -1,7 +1,12 @@
 local MOD_NAME = "[OblivionRenamer]"
 local OUTPUT_PATH = "ue4ss/Mods/OblivionRenamer/diagnostics/latest.txt"
 local MAGIC_MENU_PAGE = 2
-local PROBE_VERSION = "0.0.2"
+local PROBE_VERSION = "0.0.3"
+
+local SPELLMAKING_ASSETS = {
+    "/Game/UI/Modern/GameMenuLayer/Spellmaking/WBP_ModernMenu_SpellMakingMenu.WBP_ModernMenu_SpellMakingMenu",
+    "/Game/UI/Modern/GameMenuLayer/Spellmaking/WBP_ModernMenu_SpellMakingMenu.WBP_ModernMenu_SpellMakingMenu_C",
+}
 
 local VALUE_KEYWORDS = {
     "name", "text", "form", "spell", "editor", "record", "custom", "type", "index", "id"
@@ -113,6 +118,10 @@ local function describe_value(value)
         end
     end
 
+    if ue_type == "UObject" or ue_type == "AActor" or ue_type == "UClass" or ue_type == "UFunction" then
+        return string.format("<null %s>", tostring(ue_type))
+    end
+
     local text = safe("userdata ToString", function()
         return value:ToString()
     end)
@@ -125,6 +134,17 @@ end
 
 local function dump_function(lines, func, indent)
     indent = indent or "  "
+    local full_name = safe("function full name", function()
+        return func:GetFullName()
+    end)
+    local stable_func = nil
+    if full_name then
+        local object_path = string.gsub(full_name, "^%S+%s+", "")
+        stable_func = safe("stable function lookup", function()
+            return StaticFindObject(object_path)
+        end)
+    end
+    local signature_source = is_valid_object(stable_func) and stable_func or func
     local name = safe("function name", function()
         return func:GetFName():ToString()
     end) or "<unknown>"
@@ -132,9 +152,12 @@ local function dump_function(lines, func, indent)
         return func:GetFunctionFlags()
     end) or 0
     append(lines, string.format("%s%s [flags=0x%X]", indent, name, flags))
+    if full_name then
+        append(lines, string.format("%s  full-name: %s", indent, full_name))
+    end
 
     safe("function parameters", function()
-        func:ForEachProperty(function(property)
+        signature_source:ForEachProperty(function(property)
             local property_name = property:GetFName():ToString()
             local property_class = safe("function property class", function()
                 return property:GetClass():GetFName():ToString()
@@ -278,62 +301,85 @@ local function dump_candidate_altar_apis(lines)
     append(lines, "== Candidate loaded Altar APIs ==")
     append(lines, "Only classes/properties/functions matching rename and persistence keywords are listed.")
 
-    local classes = FindAllOf("Class")
-    if not classes then
-        append(lines, "FindAllOf(\"Class\") returned no loaded classes.")
-        return
-    end
-
     local emitted_classes = 0
     local emitted_functions = 0
-    for _, class in ipairs(classes) do
-        if emitted_classes >= 250 or emitted_functions >= 1500 then
-            append(lines, "Candidate scan stopped at its safety cap.")
-            break
+    local emitted_objects = 0
+    local cap_reached = false
+
+    ForEachUObject(function(object)
+        if cap_reached then
+            return
         end
 
-        if is_valid_object(class) then
-            local full_name = safe("candidate class name", function()
-                return class:GetFullName()
-            end) or ""
-            local lower_name = string.lower(full_name)
-            if string.find(lower_name, "/script/altar.", 1, true) and contains_any(lower_name, CLASS_KEYWORDS) then
-                local class_lines = {}
-                safe("candidate properties", function()
-                    class:ForEachProperty(function(property)
-                        local property_name = property:GetFName():ToString()
-                        if contains_any(property_name, VALUE_KEYWORDS) then
-                            local property_class = safe("candidate property class", function()
-                                return property:GetClass():GetFName():ToString()
-                            end) or "unknown"
-                            append(class_lines, string.format("  property %s [%s]", property_name, property_class))
-                        end
-                    end)
-                end)
-                safe("candidate functions", function()
-                    class:ForEachFunction(function(func)
-                        local function_name = func:GetFName():ToString()
-                        if contains_any(function_name, FUNCTION_KEYWORDS) then
-                            dump_function(class_lines, func, "  function ")
-                            emitted_functions = emitted_functions + 1
-                        end
-                    end)
-                end)
+        local full_name = safe("registry object name", function()
+            return object:GetFullName()
+        end) or ""
+        local lower_name = string.lower(full_name)
+        local is_altar = string.find(lower_name, "/script/altar.", 1, true) ~= nil
+        local is_spellmaking_asset = string.find(lower_name, "spellmaking", 1, true) ~= nil
 
-                if #class_lines > 0 then
-                    append(lines, "")
-                    append(lines, full_name)
-                    for _, line in ipairs(class_lines) do
-                        append(lines, line)
+        if string.find(lower_name, "function ", 1, true) == 1
+            and (is_altar or is_spellmaking_asset)
+            and contains_any(lower_name, FUNCTION_KEYWORDS)
+        then
+            append(lines, "")
+            append(lines, full_name)
+            dump_function(lines, object, "  ")
+            emitted_functions = emitted_functions + 1
+        elseif (string.find(lower_name, "class ", 1, true) == 1
+                or string.find(lower_name, "blueprintgeneratedclass ", 1, true) == 1)
+            and (is_altar or is_spellmaking_asset)
+            and contains_any(lower_name, CLASS_KEYWORDS)
+        then
+            local class_lines = {}
+            safe("registry class properties", function()
+                object:ForEachProperty(function(property)
+                    local property_name = property:GetFName():ToString()
+                    if contains_any(property_name, VALUE_KEYWORDS) then
+                        local property_class = safe("registry property class", function()
+                            return property:GetClass():GetFName():ToString()
+                        end) or "unknown"
+                        append(class_lines, string.format("  property %s [%s]", property_name, property_class))
                     end
-                    emitted_classes = emitted_classes + 1
+                end)
+            end)
+            if #class_lines > 0 then
+                append(lines, "")
+                append(lines, full_name)
+                for _, line in ipairs(class_lines) do
+                    append(lines, line)
                 end
+                emitted_classes = emitted_classes + 1
             end
+        elseif is_spellmaking_asset and emitted_objects < 250 then
+            append(lines, "")
+            append(lines, "loaded-object: " .. full_name)
+            emitted_objects = emitted_objects + 1
         end
+
+        if emitted_classes >= 300 or emitted_functions >= 1800 then
+            cap_reached = true
+        end
+    end)
+
+    if cap_reached then
+        append(lines, "Candidate scan stopped at its safety cap.")
     end
 
     append(lines, "")
-    append(lines, string.format("Candidate scan totals: %d classes, %d functions", emitted_classes, emitted_functions))
+    append(lines, string.format("Candidate scan totals: %d classes, %d functions, %d spellmaking objects",
+        emitted_classes, emitted_functions, emitted_objects))
+end
+
+local function load_spellmaking_assets(lines)
+    append(lines, "")
+    append(lines, "== Spellmaking asset load results ==")
+    for _, asset_path in ipairs(SPELLMAKING_ASSETS) do
+        local asset = safe("LoadAsset " .. asset_path, function()
+            return LoadAsset(asset_path)
+        end)
+        append(lines, asset_path .. ": " .. describe_value(asset))
+    end
 end
 
 local function magic_menu_is_open()
@@ -365,7 +411,7 @@ local function write_report(lines)
     return true
 end
 
-local function run_bridge_probe()
+local function run_bridge_probe(asset_lines)
     if not magic_menu_is_open() then
         notify("Open the Magic menu, highlight a spell, then press F2.")
         return
@@ -393,7 +439,10 @@ local function run_bridge_probe()
 
     local lines = {}
     append(lines, "Oblivion Renamer bridge probe " .. PROBE_VERSION)
-    append(lines, "This probe is read-only. It does not call hover handlers or change game/save data.")
+    append(lines, "This probe is read-only. It loads UI assets for reflection but does not call hover handlers or change game/save data.")
+    for _, line in ipairs(asset_lines or {}) do
+        append(lines, line)
+    end
     dump_selected_spell(lines, spell)
     dump_bridge_values(lines, get_bridge_values(ui_subsystem))
     dump_view_model_bridge_signatures(lines, magic_menu, ui_subsystem)
@@ -411,7 +460,13 @@ local function run_bridge_probe()
 end
 
 RegisterKeyBind(Key.F2, function()
-    ExecuteAsync(run_bridge_probe)
+    ExecuteInGameThread(function()
+        local asset_lines = {}
+        load_spellmaking_assets(asset_lines)
+        ExecuteAsync(function()
+            run_bridge_probe(asset_lines)
+        end)
+    end)
 end)
 
-log("Read-only bridge probe loaded. Highlight a spell in the Magic menu and press F2.")
+log("Read-only registry probe loaded. Highlight a spell in the Magic menu and press F2.")

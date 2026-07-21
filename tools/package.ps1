@@ -1,5 +1,5 @@
 param(
-    [string]$Version = '0.0.2-bridge-probe'
+    [string]$Version = '0.0.3-registry-probe'
 )
 
 $ErrorActionPreference = 'Stop'

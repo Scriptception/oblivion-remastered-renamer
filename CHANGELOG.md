@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.3-registry-probe
+
+- Replaced the unavailable `FindAllOf("Class")` route with a bounded
+  `ForEachUObject` registry scan.
+- Added read-only loading and inspection of the existing spellmaking UI asset.
+- Added stable `StaticFindObject` resolution for reflected function signatures.
+- Improved null-object reporting without noisy `ToString` calls.
+
 ## 0.0.2-bridge-probe
 
 - Added read-only capture of `InventoryHoveredObjectForm` and its underlying
