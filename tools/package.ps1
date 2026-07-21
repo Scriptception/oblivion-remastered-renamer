@@ -1,5 +1,5 @@
 param(
-    [string]$Version = '0.1.2-safe-map-replace-dev'
+    [string]$Version = '0.1.3-typed-ftext-dev'
 )
 
 $ErrorActionPreference = 'Stop'

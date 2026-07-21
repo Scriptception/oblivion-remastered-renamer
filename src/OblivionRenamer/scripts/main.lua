@@ -1,5 +1,5 @@
 local MOD_NAME = "[OblivionRenamer]"
-local MOD_VERSION = "0.1.2-dev"
+local MOD_VERSION = "0.1.3-dev"
 local MAGIC_MENU_PAGE = 2
 local MAX_NAME_LENGTH = 80
 
@@ -192,11 +192,12 @@ local function mutate_saved_name(save_object, key, old_name, new_name)
         return false, "The original saved name changed before confirmation."
     end
 
-    -- Never write through the LocalUnrealParam yielded by TMap:ForEach here.
-    -- UE4SS 3.0.1a crashed in its FString setter on this game. TMap:Add is the
-    -- supported replacement operation and does not retain that temporary value.
+    -- UserInputTextsMap is TMap<FString, FText>. UE4SS's TextProperty setter
+    -- requires FText userdata; passing the Lua string directly makes the native
+    -- pusher reinterpret it as FText and crashes before pcall can recover.
+    local replacement_text = FText(new_name)
     local replace_ok = safe("replace saved-name map entry", function()
-        map:Add(key, new_name)
+        map:Add(key, replacement_text)
         return true
     end)
     if not replace_ok then
@@ -207,8 +208,9 @@ local function mutate_saved_name(save_object, key, old_name, new_name)
         return plain_text(map:Find(key):get())
     end)
     if verified_name ~= new_name then
+        local original_text = FText(old_name)
         safe("restore saved-name entry after failed verification", function()
-            map:Add(key, old_name)
+            map:Add(key, original_text)
         end)
         return false, "The saved-name replacement could not be verified."
     end

@@ -27,13 +27,25 @@ foreach ($token in $forbidden) {
 }
 
 if ($source.Contains('value_param:set')) {
-    throw 'Unsafe in-place TMap FString mutation detected; use TMap:Add replacement.'
+    throw 'Unsafe in-place TMap FText mutation detected; use typed TMap:Add replacement.'
+}
+
+foreach ($unsafeTextWrite in @(
+    'map:Add(key, new_name)',
+    'map:Add(key, old_name)'
+)) {
+    if ($source.Contains($unsafeTextWrite)) {
+        throw "Unsafe plain-string write to an FText map value detected: $unsafeTextWrite"
+    }
 }
 
 foreach ($requiredToken in @(
     'WBP_LegacyMenu_TextEdit',
     'UserInputTextsMap',
-    'map:Add(key, new_name)',
+    'local replacement_text = FText(new_name)',
+    'map:Add(key, replacement_text)',
+    'local original_text = FText(old_name)',
+    'map:Add(key, original_text)',
     'map:Find(key)',
     'undo/last-rename.txt',
     'RegisterHook(OK_HOOK',
@@ -44,4 +56,4 @@ foreach ($requiredToken in @(
     }
 }
 
-Write-Host 'Validation passed: F2, native dialog, exact-map rename, undo record, and console safety boundary.'
+Write-Host 'Validation passed: F2, native dialog, typed FText map replacement, undo record, and console safety boundary.'

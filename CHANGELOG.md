@@ -1,21 +1,36 @@
 # Changelog
 
+## 0.1.3-dev
+
+- Corrected the saved-name map value type from a plain Lua string to a real
+  `FText` object before calling `TMap:Add`.
+- Confirmed from the game SDK that `UserInputTextsMap` is
+  `TMap<FString, FText>`, and from the exact installed UE4SS source revision
+  (`437a8ff`) that its `TextProperty` setter requires `FText` userdata.
+- Added validation that rejects plain-string writes to this map, preventing the
+  native type-confusion crash from being reintroduced.
+- Marked both 0.1.1 and 0.1.2 confirmation crashes as consequences of the same
+  incorrect `FText` argument type.
+
 ## 0.1.2-dev
 
-- Replaced the crashing UE4SS 3.0.1a in-place `FString` map-value write with
+- Replaced the crashing UE4SS 3.0.1a in-place map-value write with
   `TMap:Add`, which replaces the existing key/value pair through the supported
   map API.
 - Added a post-write lookup and rollback attempt if the replacement cannot be
   verified.
 - Added validation that rejects the known-crashing `value_param:set` pattern.
+- Known failure: this build still passed a plain Lua string where the map
+  required `FText`, so confirming a rename crashed inside UE4SS's native
+  `TextProperty` pusher.
 
 ## 0.1.1-dev
 
 - Fixed discovery of the cooked native text-edit widget class.
 - Confirmed that the in-game dialog, keyboard entry, and OK action load.
-- Known failure: confirming a rename crashed while writing through the
-  temporary value parameter returned by `TMap:ForEach`; the undo record remained
-  at `status=pending` and the game was not saved.
+- Known failure: confirming a rename crashed while writing a plain Lua string
+  into the `FText` value returned by `TMap:ForEach`; the undo record remained at
+  `status=pending` and the game was not saved.
 
 ## 0.0.4-localization-probe
 

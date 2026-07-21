@@ -31,8 +31,10 @@ the renamer deliberately does not own those records.
 ## Current development build
 
 The F2 handler resolves the selected visible spell name to exactly one entry in
-`UserInputTextSaveData.UserInputTextsMap`. It loads the game's own
-`WBP_LegacyMenu_TextEdit`, focuses its editable field, and connects the native
-OK and Back actions to confirm/cancel. Confirmation updates only that map value,
-refreshes the selected spell row when possible, and records the old value in
-`undo/last-rename.txt`.
+`UserInputTextSaveData.UserInputTextsMap`. That property is
+`TMap<FString, FText>`: the key may be supplied from a Lua string, but every
+replacement value must first be constructed with `FText(...)`. It loads the
+game's own `WBP_LegacyMenu_TextEdit`, focuses its editable field, and connects
+the native OK and Back actions to confirm/cancel. Confirmation updates only
+that map value, refreshes the selected spell row when possible, and records the
+old value in `undo/last-rename.txt`.
