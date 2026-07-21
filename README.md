@@ -42,7 +42,7 @@ NL Tag Remover 1.3.3.
 
 1. Install and verify UE4SS for Oblivion Remastered.
 2. Close the game completely.
-3. Download `OblivionRenamer-1.0.0.zip` from
+3. Download the latest `OblivionRenamer-<version>.zip` from
    [Releases](https://github.com/Scriptception/oblivion-remastered-renamer/releases).
 4. Extract the ZIP into the directory containing the game's shipping
    executable and existing `ue4ss` folder:

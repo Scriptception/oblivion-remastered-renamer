@@ -1,5 +1,5 @@
 local MOD_NAME = "[OblivionRenamer]"
-local MOD_VERSION = "1.0.0"
+local MOD_VERSION = "1.0.1"
 local INVENTORY_MENU_PAGE = 1
 local MAGIC_MENU_PAGE = 2
 local MAX_NAME_LENGTH = 80

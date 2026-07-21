@@ -5,6 +5,14 @@ All notable changes to this project are documented here. The project follows
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-07-21
+
+### Fixed
+
+- Made release archives byte-for-byte reproducible across local PowerShell and
+  GitHub-hosted Windows runners by fixing packaged text line endings and using
+  implementation-independent stored ZIP entries.
+
 ## [1.0.0] - 2026-07-21
 
 ### Added
@@ -29,5 +37,6 @@ All notable changes to this project are documented here. The project follows
 - Verify every replacement and attempt rollback if verification fails.
 - Never invoke the developer console or issue save commands.
 
-[Unreleased]: https://github.com/Scriptception/oblivion-remastered-renamer/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/Scriptception/oblivion-remastered-renamer/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/Scriptception/oblivion-remastered-renamer/releases/tag/v1.0.1
 [1.0.0]: https://github.com/Scriptception/oblivion-remastered-renamer/releases/tag/v1.0.0
