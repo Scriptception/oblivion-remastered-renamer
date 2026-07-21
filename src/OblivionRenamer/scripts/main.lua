@@ -1,5 +1,5 @@
 local MOD_NAME = "[OblivionRenamer]"
-local MOD_VERSION = "1.0.1"
+local MOD_VERSION = "1.1.0"
 local INVENTORY_MENU_PAGE = 1
 local MAGIC_MENU_PAGE = 2
 local MAX_NAME_LENGTH = 80
@@ -157,8 +157,14 @@ local function get_hovered_inventory_selection()
         row = nil,
         current_form = nil,
         object_hovered_form = nil,
+        selection_error = nil,
     }
     local fallback = nil
+    local candidate_count = 0
+    local viewport_candidate = nil
+    local viewport_count = 0
+    local focused_candidate = nil
+    local focused_count = 0
     local widgets = safe("FindAllOf inventory widget", function()
         return FindAllOf("WBP_OriginalMenu_Inventory_C")
     end)
@@ -188,24 +194,54 @@ local function get_hovered_inventory_selection()
                     current_form = current_form,
                     object_hovered_form = object_hovered_form,
                 }
+                candidate_count = candidate_count + 1
                 fallback = fallback or candidate
 
                 local in_viewport = safe("inventory widget viewport state", function()
                     return widget:IsInViewport()
                 end)
                 if in_viewport == true then
-                    fallback = candidate
-                    break
+                    viewport_count = viewport_count + 1
+                    viewport_candidate = candidate
+                end
+
+                local has_focus = safe("read inventory widget focus state", function()
+                    return widget:HasFocusedDescendants()
+                end)
+                if has_focus == true then
+                    focused_count = focused_count + 1
+                    focused_candidate = candidate
                 end
             end
         end
     end
 
-    if fallback then
-        result.hovered_item = fallback.hovered_item
-        result.row = fallback.row
-        result.current_form = fallback.current_form
-        result.object_hovered_form = fallback.object_hovered_form
+    local selected = nil
+    if focused_count == 1 then
+        selected = focused_candidate
+        if candidate_count > 1 then
+            log(string.format("Selected the focused Inventory widget from %d live candidates.", candidate_count))
+        end
+    elseif focused_count > 1 then
+        result.selection_error = "Inventory selection is still updating; move the highlight and press F2 again."
+        log(string.format("Inventory selection rejected: %d widgets reported focused descendants.", focused_count))
+    elseif viewport_count == 1 then
+        selected = viewport_candidate
+    elseif viewport_count > 1 then
+        result.selection_error = "Inventory selection is still updating; move the highlight and press F2 again."
+        log(string.format("Inventory selection rejected: %d visible widgets and no focused candidate.", viewport_count))
+    elseif candidate_count == 1 then
+        selected = fallback
+    elseif candidate_count > 1 then
+        result.selection_error = "Inventory selection is still updating; move the highlight and press F2 again."
+        log(string.format("Inventory selection rejected: %d live widgets and no active candidate.", candidate_count))
+    end
+
+    if selected then
+        result.hovered_item = selected.hovered_item
+        result.row = selected.row
+        result.current_form = selected.current_form
+        result.object_hovered_form = selected.object_hovered_form
     end
     return result
 end
@@ -372,6 +408,9 @@ local function get_highlighted_custom_item_target()
     end
 
     local selection = get_hovered_inventory_selection()
+    if selection.selection_error then
+        return nil, selection.selection_error
+    end
     if not is_valid_object(selection.hovered_item) or selection.row == nil then
         return nil, "No highlighted inventory item was found."
     end
@@ -432,6 +471,7 @@ local function get_highlighted_custom_item_target()
     end))
     local target = nil
     local saved_key = nil
+    local resolved_by_key = false
     if form_name and string.match(form_name, "^UI_UserInputText_") then
         local keyed_target = find_saved_name_target_by_key(form_name)
         if keyed_target.key_count > 0 then
@@ -440,6 +480,7 @@ local function get_highlighted_custom_item_target()
             end
             target = keyed_target
             saved_key = form_name
+            resolved_by_key = true
             if selected_name ~= keyed_target.current_value then
                 log("Inventory row name is stale; using current saved value: " .. keyed_target.current_value)
                 selected_name = keyed_target.current_value
@@ -472,6 +513,7 @@ local function get_highlighted_custom_item_target()
         form_id = form_id,
         source_form_id = source_form_id,
         inventory_index = inventory_index,
+        allow_shared_name = resolved_by_key,
     }
     return state, nil
 end
@@ -629,16 +671,21 @@ local function commit_dialog()
         return
     end
 
-    local conflict_count = count_saved_name_conflicts(new_name, state.saved_key)
-    if conflict_count == nil then
-        log("Rename rejected because saved-name conflicts could not be checked.")
-        notify("Rename cancelled: saved-name conflicts could not be checked.")
-        return
-    end
-    if conflict_count > 0 then
-        log(string.format("Rename rejected because %d other custom entries use: %s", conflict_count, new_name))
-        notify("Another custom spell or item already uses that name.")
-        return
+    local exact_item_identity = state.entity_kind == "custom-enchanted-item" and state.allow_shared_name == true
+    if exact_item_identity then
+        log("Shared-name check skipped because the highlighted item is bound to its exact saved-name key.")
+    else
+        local conflict_count = count_saved_name_conflicts(new_name, state.saved_key)
+        if conflict_count == nil then
+            log("Rename rejected because saved-name conflicts could not be checked.")
+            notify("Rename cancelled: saved-name conflicts could not be checked.")
+            return
+        end
+        if conflict_count > 0 then
+            log(string.format("Rename rejected because %d other custom entries use: %s", conflict_count, new_name))
+            notify("Another custom spell or item already uses that name.")
+            return
+        end
     end
 
     local undo_ok, undo_error = write_undo_record(state, new_name, "pending")

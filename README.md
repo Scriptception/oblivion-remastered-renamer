@@ -20,8 +20,10 @@ game's saved custom-name map.
 - Preserves prefixes, leading spaces, and sorting tags exactly as entered.
 - Handles Inventory rows that still display the previous name after a rename.
 - Writes a recovery record before every change.
-- Rejects duplicate target names, empty names, control characters, and names
-  longer than 80 Unicode characters.
+- Allows exact-key enchanted items to share names while rejecting unsafe
+  ambiguous spell or fallback-item matches.
+- Rejects empty names, control characters, and names longer than 80 Unicode
+  characters.
 - Never invokes the developer console.
 
 ## Requirements and support
@@ -32,7 +34,7 @@ game's saved custom-name map.
   `1.0.12.0`.
 - Tested with UE4SS `v3.0.1 Beta #0`, Git SHA `437a8ff`.
 - The Steam `Win64` build is not yet runtime-tested and is not claimed as
-  supported in v1.0.0.
+  supported in v1.1.0.
 
 The release was tested alongside FuzzUI - Interface Tweaks 2.0.0, Inventory
 Sorting Tags 1.5 Non-Deluxe, Press E To Confirm 1.0, Spell Hotkeys 1.2.5, and
@@ -111,8 +113,11 @@ backup save while evaluating any mod that changes save-backed data.
 ## Compatibility notes
 
 - Sorting prefixes and tags are ordinary name text and are preserved.
-- New names already used by another custom spell or item are rejected to avoid
-  ambiguous future lookups.
+- Player-created enchanted items may share a name with another custom item or
+  spell when the highlighted item's stable saved-name key is available. The
+  hovered item's dynamic form keeps later renames unambiguous.
+- Spell destination names already used by another custom entry remain rejected
+  until the Magic row can be bound to its stable saved-name key.
 - Oblivion itself can create duplicate custom names. The Magic row exposes its
   displayed name and inventory index, but not its stable saved-name key. If two
   custom creations already share a displayed name, the mod refuses to guess
@@ -127,7 +132,7 @@ backup save while evaluating any mod that changes save-backed data.
 
 Oblivion Renamer does not execute the developer console or intentionally enable
 developer mode. Achievement behavior is ultimately controlled by the game,
-platform, and the user's wider UE4SS setup, so v1.0.0 does not guarantee
+platform, and the user's wider UE4SS setup, so the mod does not guarantee
 achievement compatibility.
 
 ## Updating and uninstalling
@@ -150,8 +155,9 @@ npx --yes @johnnymorganz/stylua-bin@2.5.2 --check .\src\OblivionRenamer\scripts\
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\package.ps1
 ```
 
-See [Architecture](docs/ARCHITECTURE.md), [Testing](docs/TESTING.md), and
-[Contributing](CONTRIBUTING.md) for the release safety model.
+See [Architecture](docs/ARCHITECTURE.md), [Testing](docs/TESTING.md),
+[Roadmap](docs/ROADMAP.md), and [Contributing](CONTRIBUTING.md) for the release
+safety model and planned native spell-identity research.
 
 ## License and disclaimer
 

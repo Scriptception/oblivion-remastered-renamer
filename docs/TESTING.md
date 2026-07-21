@@ -40,8 +40,15 @@ Use a backed-up test save and the exact release-candidate archive.
   row without equipping or unequipping it.
 - A second rename works before the stale Inventory row refreshes.
 - The list refreshes after closing and reopening the player menu.
+- Repeated player-menu close/reopen cycles continue to target the highlighted
+  row on the first F2 attempt, without selecting a stale Inventory widget.
 - The final name persists after save, exit, relaunch, and reload.
 - A built-in or unenchanted item is rejected.
+- Two key-resolved custom enchanted items can be given the same displayed name,
+  and hovering either one still renames only that item.
+- A key-resolved custom enchanted item can share a name with a custom spell.
+- A fallback item whose form does not expose a saved-name key still rejects a
+  duplicate destination name.
 
 ### Validation and recovery
 
@@ -51,3 +58,20 @@ Use a backed-up test save and the exact release-candidate archive.
 
 Record the game distribution, package version, UE4SS version and Git SHA, other
 installed UI/hotkey mods, and the archive checksum with the release evidence.
+
+## v1.1.0 release evidence
+
+- Tested on 2026-07-21 with the Xbox app / PC Game Pass `WinGDK` package
+  version `1.0.12.0` and UE4SS `v3.0.1 Beta #0`, Git SHA `437a8ff`.
+- Tested archive: `OblivionRenamer-1.1.0.zip`.
+- SHA-256: `05022D0585058A9AE1950CD431BF618F08CF7469186EC95172F5B4F4A8003765`.
+- Co-installed mods: FuzzUI - Interface Tweaks 2.0.0, Inventory Sorting Tags
+  1.5 Non-Deluxe, Press E To Confirm 1.0, Spell Hotkeys 1.2.5, and NL Tag
+  Remover 1.3.3.
+- Two enchanted items were assigned the same name, targeted independently
+  after repeated player-menu reopen cycles, saved, reloaded after a full game
+  restart, and renamed independently again.
+- The test also covered sharing that name with existing custom spell entries.
+- The final recovery record was `status=applied`, and the fresh UE4SS log
+  contained no Oblivion Renamer error.
+- Steam `Win64` remains untested and is not claimed as supported.
