@@ -9,7 +9,19 @@ permissions:
   contents: write
 
 jobs:
+  regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - name: Install Lua 5.3
+        run: sudo apt-get update -qq && sudo apt-get install -y lua5.3
+      - name: Test rename dialog isolation and game-thread access
+        run: lua5.3 tests/rename_dialog.lua
+
   release:
+    needs: regressions
     runs-on: windows-latest
     timeout-minutes: 10
 
@@ -40,7 +52,7 @@ jobs:
 
       - name: Check Lua formatting
         shell: pwsh
-        run: npx --yes @johnnymorganz/stylua-bin@2.5.2 --check ./src/OblivionRenamer/scripts/main.lua
+        run: npx --yes @johnnymorganz/stylua-bin@2.5.2 --check ./src/OblivionRenamer/scripts/main.lua ./tests/rename_dialog.lua
 
       - name: Build and verify package
         shell: pwsh

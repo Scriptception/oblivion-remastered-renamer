@@ -1,22 +1,17 @@
 local MOD_NAME = "[OblivionRenamer]"
-local MOD_VERSION = "1.1.0"
+local MOD_VERSION = "1.1.1-rc.1"
 local INVENTORY_MENU_PAGE = 1
 local MAGIC_MENU_PAGE = 2
 local MAX_NAME_LENGTH = 80
 
-local TEXT_EDIT_ASSET = "/Game/UI/Legacy/ModalLayer/WBP_LegacyMenu_TextEdit"
-local TEXT_EDIT_CLASS = TEXT_EDIT_ASSET .. ".WBP_LegacyMenu_TextEdit_C"
-local TEXT_EDIT_SHORT_CLASS = "WBP_LegacyMenu_TextEdit_C"
-local OK_HOOK = TEXT_EDIT_CLASS .. ":OnOkButtonClicked"
-local BACK_HOOK = TEXT_EDIT_CLASS .. ":OnBackButtonClicked"
+-- A plain native host has no legacy text-edit Blueprint or enchanting callbacks.
+local RENAME_WIDGET_CLASS = "/Script/Altar.VAltarWidget"
 local UNDO_PATH = "ue4ss/Mods/OblivionRenamer/undo/last-rename.txt"
 local SPELL_HOTKEYS_STATE_PATH = "ue4ss/Mods/SpellHotKeys/savestate.txt"
 
 local UEHelpers = require("UEHelpers")
 
 local active_dialog = nil
-local hooks_registered = false
-local cached_text_edit_class = nil
 
 local function log(message)
     print(string.format("%s %s\n", MOD_NAME, message))
@@ -108,15 +103,6 @@ local function plain_text(value)
     end)
 end
 
-local function describe_object(object)
-    if not is_valid_object(object) then
-        return "<invalid>"
-    end
-    return safe("object full name", function()
-        return object:GetFullName()
-    end) or "<unknown>"
-end
-
 local function get_visible_player_menu_page()
     local player_menu = find_first_valid("VPlayerMenuViewModel")
     if not player_menu then
@@ -178,21 +164,9 @@ local function get_hovered_inventory_selection()
                 return widget.CurrentHoveredItem
             end)
             if is_valid_object(hovered_item) then
-                local row = safe("read hovered inventory item properties", function()
-                    return hovered_item:GetProperties()
-                end)
-                local current_form = safe("read inventory widget CurrentFormID", function()
-                    return widget.CurrentFormID
-                end)
-                local object_hovered_form = safe("read inventory widget ObjectHoveredFormID", function()
-                    return widget.ObjectHoveredFormID
-                end)
                 local candidate = {
                     widget = widget,
                     hovered_item = hovered_item,
-                    row = row,
-                    current_form = current_form,
-                    object_hovered_form = object_hovered_form,
                 }
                 candidate_count = candidate_count + 1
                 fallback = fallback or candidate
@@ -239,9 +213,17 @@ local function get_hovered_inventory_selection()
 
     if selected then
         result.hovered_item = selected.hovered_item
-        result.row = selected.row
-        result.current_form = selected.current_form
-        result.object_hovered_form = selected.object_hovered_form
+        -- Read row/form data only after resolving the active widget. A stale
+        -- Inventory widget can still be valid while its row data is obsolete.
+        result.row = safe("read hovered inventory item properties", function()
+            return selected.hovered_item:GetProperties()
+        end)
+        result.current_form = safe("read inventory widget CurrentFormID", function()
+            return selected.widget.CurrentFormID
+        end)
+        result.object_hovered_form = safe("read inventory widget ObjectHoveredFormID", function()
+            return selected.widget.ObjectHoveredFormID
+        end)
     end
     return result
 end
@@ -724,165 +706,73 @@ local function cancel_dialog()
     notify(entity_label .. " rename cancelled.")
 end
 
-local function hook_context_object(context)
-    if context == nil then
-        return nil
+local function construct_widget(class_path, tree)
+    local widget_class = StaticFindObject(class_path)
+    if not is_valid_object(widget_class) then
+        error("Widget class is unavailable: " .. class_path)
     end
-    return safe("hook context", function()
-        return context:get()
-    end)
-end
-
-local function ensure_dialog_hooks()
-    if hooks_registered then
-        return true
-    end
-
-    local ok_registered, registration_error = pcall(function()
-        RegisterHook(OK_HOOK, function(context)
-            local widget = hook_context_object(context)
-            if active_dialog and same_object(widget, active_dialog.widget) then
-                commit_dialog()
-            end
-        end)
-        RegisterHook(BACK_HOOK, function(context)
-            local widget = hook_context_object(context)
-            if active_dialog and same_object(widget, active_dialog.widget) then
-                cancel_dialog()
-            end
-        end)
-    end)
-    if not ok_registered then
-        log("Could not register the native text-edit button hooks: " .. tostring(registration_error))
-        return false
-    end
-
-    hooks_registered = true
-    return true
-end
-
-local function load_text_edit_class()
-    if is_valid_object(cached_text_edit_class) then
-        return cached_text_edit_class
-    end
-
-    local object_path = TEXT_EDIT_ASSET .. ".WBP_LegacyMenu_TextEdit"
-    local load_paths = {
-        TEXT_EDIT_CLASS,
-        TEXT_EDIT_ASSET .. "_C",
-        object_path,
-        TEXT_EDIT_ASSET,
-    }
-
-    for _, load_path in ipairs(load_paths) do
-        local loaded = safe("load native text-edit asset " .. load_path, function()
-            return LoadAsset(load_path)
-        end)
-        if is_valid_object(loaded) then
-            log("LoadAsset resolved " .. load_path .. " as " .. describe_object(loaded))
-        else
-            log("LoadAsset returned no object for " .. load_path)
-        end
-
-        local direct = safe("find native text-edit class by full path", function()
-            return StaticFindObject(TEXT_EDIT_CLASS)
-        end)
-        if is_valid_object(direct) then
-            log("Resolved native text-edit class directly: " .. describe_object(direct))
-            cached_text_edit_class = direct
-            return direct
-        end
-
-        local by_short_name = safe("find native text-edit class by short name", function()
-            return FindObject("Class", TEXT_EDIT_SHORT_CLASS)
-        end)
-        if is_valid_object(by_short_name) then
-            log("Resolved native text-edit class by short name: " .. describe_object(by_short_name))
-            cached_text_edit_class = by_short_name
-            return by_short_name
-        end
-    end
-
-    local discovered = nil
-    safe("scan loaded objects for native text-edit class", function()
-        ForEachUObject(function(object)
-            if discovered == nil and is_valid_object(object) then
-                local short_name = safe("loaded object short name", function()
-                    return object:GetFName():ToString()
-                end)
-                if short_name == TEXT_EDIT_SHORT_CLASS then
-                    discovered = object
-                end
-            end
-        end)
-    end)
-    if is_valid_object(discovered) then
-        log("Resolved native text-edit class through the loaded-object registry: " .. describe_object(discovered))
-        cached_text_edit_class = discovered
-        return discovered
-    end
-
-    log("Native text-edit class was not present after all load and lookup forms.")
-    return nil
-end
-
-local function create_text_edit_widget(widget_class)
-    local player_controller = safe("get player controller", function()
-        return UEHelpers.GetPlayerController()
-    end)
-    if not is_valid_object(player_controller) then
-        return nil
-    end
-
-    local widget_library = safe("find WidgetBlueprintLibrary", function()
-        return StaticFindObject("/Script/UMG.Default__WidgetBlueprintLibrary")
-    end)
-    if not is_valid_object(widget_library) then
-        return nil
-    end
-
-    local widget = safe("create native text-edit widget", function()
-        return widget_library:Create(player_controller, widget_class, player_controller)
-    end)
+    local widget = StaticConstructObject(widget_class, tree)
     if not is_valid_object(widget) then
-        return nil
+        error("Widget could not be constructed: " .. class_path)
     end
     return widget
 end
 
-local function set_up_text_edit_widget(state)
-    local prompt = safe("read text-edit prompt widget", function()
-        return state.widget.textedit_prompt
+local function create_rename_widget()
+    return safe("create isolated rename widget", function()
+        local player_controller = UEHelpers.GetPlayerController()
+        local widget_class = StaticFindObject(RENAME_WIDGET_CLASS)
+        local widget_library = StaticFindObject("/Script/UMG.Default__WidgetBlueprintLibrary")
+        if
+            not is_valid_object(player_controller)
+            or not is_valid_object(widget_class)
+            or not is_valid_object(widget_library)
+        then
+            return nil
+        end
+        return widget_library:Create(player_controller, widget_class, player_controller)
     end)
-    local text_field = safe("read text-edit input widget", function()
-        return state.widget.textedit_text
-    end)
-    if not is_valid_object(text_field) then
-        return false
-    end
-    state.text_field = text_field
+end
 
-    if is_valid_object(prompt) then
-        safe("set rename prompt", function()
-            prompt:SetText(FText(state.prompt))
-        end)
-    end
-    safe("set current name", function()
+local function set_up_rename_widget(state)
+    return safe("set up isolated rename widget", function()
+        local tree = state.widget.WidgetTree
+        if not is_valid_object(tree) then
+            tree = construct_widget("/Script/UMG.WidgetTree", state.widget)
+            state.widget.WidgetTree = tree
+        end
+
+        local border = construct_widget("/Script/UMG.Border", tree)
+        local layout = construct_widget("/Script/UMG.VerticalBox", tree)
+        local prompt = construct_widget("/Script/UMG.TextBlock", tree)
+        local text_field = construct_widget("/Script/UMG.EditableTextBox", tree)
+        local instructions = construct_widget("/Script/UMG.TextBlock", tree)
+        state.text_field = text_field
+        tree.RootWidget = border
+        border:SetBrushColor({ R = 0.06, G = 0.04, B = 0.02, A = 1 })
+        border:SetPadding({ Left = 24, Top = 24, Right = 24, Bottom = 24 })
+        border:SetContent(layout)
+        layout:AddChildToVerticalBox(prompt)
+        local input_slot = layout:AddChildToVerticalBox(text_field)
+        input_slot:SetPadding({ Left = 0, Top = 12, Right = 0, Bottom = 12 })
+        layout:AddChildToVerticalBox(instructions)
+        prompt:SetAutoWrapText(true)
+        prompt:SetText(FText(state.prompt))
+        instructions:SetAutoWrapText(true)
+        instructions:SetText(
+            FText(string.format("Enter: rename     Escape: cancel     Maximum %d characters", MAX_NAME_LENGTH))
+        )
         text_field:SetText(FText(state.old_name))
-    end)
-    safe("add rename dialog to viewport", function()
+        text_field:SetClearKeyboardFocusOnCommit(false)
         state.widget:AddToViewport(10000)
-    end)
-    safe("activate rename dialog", function()
+        state.widget:SetDesiredSizeInViewport({ X = 560, Y = 240 })
+        state.widget:SetAnchorsInViewport({ Minimum = { X = 0.5, Y = 0.5 }, Maximum = { X = 0.5, Y = 0.5 } })
+        state.widget:SetAlignmentInViewport({ X = 0.5, Y = 0.5 })
         state.widget:ActivateWidget()
-    end)
-    safe("focus rename text field", function()
         text_field:SetFocus()
-    end)
-    safe("give rename field keyboard focus", function()
         text_field:SetKeyboardFocus()
-    end)
-    return true
+        return true
+    end) == true
 end
 
 local function present_rename_dialog(state)
@@ -891,40 +781,33 @@ local function present_rename_dialog(state)
         return false
     end
 
-    local widget_class = load_text_edit_class()
-    if not widget_class then
-        notify("The in-game rename screen could not be loaded.")
-        return false
-    end
-    if not ensure_dialog_hooks() then
-        notify("The in-game rename buttons could not be connected.")
-        return false
-    end
-
-    local widget = create_text_edit_widget(widget_class)
-    if not widget then
-        notify("The in-game rename screen could not be created.")
+    local widget = create_rename_widget()
+    if not is_valid_object(widget) then
+        notify("The rename screen could not be created.")
         return false
     end
 
     state.widget = widget
     state.text_field = nil
     active_dialog = state
-    if not set_up_text_edit_widget(state) then
+    if not set_up_rename_widget(state) then
         close_dialog("setup failed")
-        notify("The in-game name field could not be initialized.")
+        notify("The name field could not be initialised.")
         return false
     end
 
     ExecuteWithDelay(100, function()
-        if active_dialog == state and is_valid_object(state.text_field) then
-            safe("restore rename field focus", function()
-                state.text_field:SetFocus()
-                state.text_field:SetKeyboardFocus()
-            end)
-        end
+        -- ExecuteWithDelay is asynchronous on the supported UE4SS build.
+        ExecuteInGameThread(function()
+            if active_dialog == state and is_valid_object(state.text_field) then
+                safe("restore rename field focus", function()
+                    state.text_field:SetFocus()
+                    state.text_field:SetKeyboardFocus()
+                end)
+            end
+        end)
     end)
-    log("Opened the native rename dialog for " .. state.entity_label .. ": " .. state.old_name)
+    log("Opened the isolated rename dialog for " .. state.entity_label .. ": " .. state.old_name)
     return true
 end
 
@@ -1012,14 +895,24 @@ RegisterKeyBind(Key.F2, function()
 end)
 
 RegisterKeyBind(Key.RETURN, function()
-    if has_active_dialog() then
-        ExecuteInGameThread(commit_dialog)
+    local state = active_dialog
+    if state then
+        ExecuteInGameThread(function()
+            if active_dialog == state and has_active_dialog() then
+                commit_dialog()
+            end
+        end)
     end
 end)
 
 RegisterKeyBind(Key.ESCAPE, function()
-    if has_active_dialog() then
-        ExecuteInGameThread(cancel_dialog)
+    local state = active_dialog
+    if state then
+        ExecuteInGameThread(function()
+            if active_dialog == state and has_active_dialog() then
+                cancel_dialog()
+            end
+        end)
     end
 end)
 

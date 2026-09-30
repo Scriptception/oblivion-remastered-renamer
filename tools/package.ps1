@@ -75,7 +75,7 @@ $writer = [IO.BinaryWriter]::new($zipStream, $utf8, $true)
 $entries = @()
 try {
     $stagePrefix = $stageRoot.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
-    $packageFiles = @(Get-ChildItem -LiteralPath $stageRoot -Recurse -File | Sort-Object FullName)
+    $packageFiles = @(Get-ChildItem -LiteralPath $stageRoot -Recurse -File -Force | Sort-Object FullName)
     foreach ($file in $packageFiles) {
         $entryName = $file.FullName.Substring($stagePrefix.Length).Replace('\', '/')
         $nameBytes = $utf8.GetBytes($entryName)

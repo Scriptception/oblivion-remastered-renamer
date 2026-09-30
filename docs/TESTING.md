@@ -5,6 +5,7 @@
 Every push and pull request must pass:
 
 - PowerShell source-contract validation.
+- Lua 5.3 rename-dialog regression scenarios (`lua5.3 tests/rename_dialog.lua`).
 - Lua 5.3 syntax parsing with `luaparse`.
 - Release archive construction and layout verification.
 - SHA-256 checksum generation.
@@ -17,7 +18,12 @@ Use a backed-up test save and the exact release-candidate archive.
 
 - The game reaches the main menu and loads a save without a fatal error.
 - F2 outside Magic and Inventory shows guidance and changes nothing.
-- Escape/Back cancels the native rename screen without changing the name.
+- Escape cancels the rename screen without changing the name.
+- Enter confirms; normal game text-edit dialogs still behave as before.
+- The independent widget is visible, centred and readable at 720p, 1080p and
+  the player’s normal display/UI scale. Typing and validation keep focus.
+- Rapid F2/Enter/Escape presses do not open duplicate screens or affect a later
+  screen. Cancelling immediately after F2 must not restore focus to a closed screen.
 - Confirming an unchanged name changes nothing.
 
 ### Custom spell
@@ -34,6 +40,13 @@ Use a backed-up test save and the exact release-candidate archive.
 - Spell Hotkeys users receive a rebind notice.
 
 ### Custom enchanted item
+
+- Immediately after enchanting, rename the new item without a chest transfer:
+  test 30, 31 and 80 characters, then cancel a second attempt. There must be no
+  crash, original 30-character warning or extra enchantment operation.
+- Verify item quantity, enchantment, charges and soul gems are unchanged.
+- Repeat on a previously enchanted item, after a chest transfer and after reload.
+- Verify ordinary enchanting still enforces its own 30-character limit.
 
 - A player-created named enchanted item can be renamed.
 - Mouse and keyboard navigation both target the currently highlighted Inventory
@@ -58,6 +71,20 @@ Use a backed-up test save and the exact release-candidate archive.
 
 Record the game distribution, package version, UE4SS version and Git SHA, other
 installed UI/hotkey mods, and the archive checksum with the release evidence.
+
+## v1.1.1-rc.1 candidate status
+
+Automated tests use UE4SS contract doubles. They exercise isolated widget creation,
+game-thread object access, a fresh item’s exact key, 30/31/80-character names,
+Unicode limits, stale Inventory candidates, repeated renames, cancellation,
+invalidated objects, setup failures and recovery-record ordering. They cannot
+reproduce native memory faults, confirm reflected APIs on a particular game build,
+or establish rendering, actual input routing or save/reload behaviour.
+
+All manual checks above are pending for this candidate. Obtain the F2 reporter’s
+game/UE4SS versions and relevant log/crash stack; the first report is too broad to
+confirm its root cause. Test Steam Win64 and the previously tested WinGDK target
+separately. Do not tag or publish the candidate until its exact archive passes.
 
 ## v1.1.0 release evidence
 
