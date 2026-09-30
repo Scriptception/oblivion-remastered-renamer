@@ -130,6 +130,7 @@ local function scenario(options, check)
     local function make_widget(path)
         local fields = {}
         for _, method in ipairs({
+            "SetAutoWrapText",
             "SetBrushColor",
             "SetPadding",
             "SetContent",
