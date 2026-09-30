@@ -31,7 +31,11 @@ $forbidden = @(
     'ProcessConsoleExec',
     'DeleteGameInSlot',
     'os.execute',
-    'io.popen'
+    'io.popen',
+    'WBP_LegacyMenu_TextEdit',
+    'RegisterSendClickedOkButton',
+    'RegisterSendClickedCancelButton',
+    'LoadAsset('
 )
 foreach ($token in $forbidden) {
     if ($source.Contains($token)) {
@@ -53,7 +57,6 @@ foreach ($unsafeTextWrite in @(
 }
 
 foreach ($requiredToken in @(
-    'WBP_LegacyMenu_TextEdit',
     'UserInputTextsMap',
     'local replacement_text = safe("construct replacement FText"',
     'return FText(new_name)',
@@ -63,11 +66,13 @@ foreach ($requiredToken in @(
     'map:Add(key, original_text)',
     'map:Find(key)',
     'undo/last-rename.txt',
-    'RegisterHook(OK_HOOK',
-    'RegisterHook(BACK_HOOK'
+    '/Script/Altar.VAltarWidget',
+    '/Script/UMG.EditableTextBox',
+    'tree.RootWidget = border',
+    'SetClearKeyboardFocusOnCommit(false)'
 )) {
     if (-not $source.Contains($requiredToken)) {
-        throw "Required native-dialog safety token was not found: $requiredToken"
+        throw "Required rename safety token was not found: $requiredToken"
     }
 }
 

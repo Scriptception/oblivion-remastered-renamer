@@ -15,8 +15,24 @@ reopens. The resolver prefers the sole widget with focused descendants, then a
 sole viewport candidate. If several stale candidates remain and none owns
 focus, it rejects the request rather than inspecting an arbitrary widget.
 
-The native `WBP_LegacyMenu_TextEdit` widget supplies the input screen. Hooks on
-its OK and Back actions commit or cancel the active rename.
+The rename screen is a native `/Script/Altar.VAltarWidget` host containing a
+mod-created UMG widget tree with a prompt, `EditableTextBox` and keyboard
+instructions. Enter commits and Escape cancels. There are no clickable OK/Back
+buttons or Blueprint text-edit hooks.
+
+The game’s `WBP_LegacyMenu_TextEdit` is deliberately not loaded or instantiated.
+Its original handlers run before UE4SS Blueprint post-hooks, so using that screen
+also runs legacy text-edit behaviour, including the 30-character enchanting
+warning. Re-entry into that bridge is a suspected cause of the freshly enchanted
+item crash; no crash dump or in-game reproduction has confirmed it yet.
+
+F2, Enter, Escape and delayed focus restoration perform all Unreal object access
+inside `ExecuteInGameThread`. On the supported UE4SS build `ExecuteWithDelay`
+runs asynchronously. Delayed and queued keyboard callbacks also check the exact
+dialog state so they cannot act on a cancelled or replacement dialog.
+
+Inventory row and form properties are read only after selecting the active widget;
+stale non-selected widgets are never queried for their row/form data.
 
 ## Persistence
 
@@ -85,3 +101,13 @@ The mod owns only the game's saved custom-name value. It does not modify built-i
 records, sorting-mod data, hotkey-mod data, executable code, or developer-console
 state. External mods that store names as identifiers may require rebinding after
 a rename.
+
+## API evidence
+
+- [UE4SS RegisterHook](https://docs.ue4ss.com/release/lua-api/global-functions/registerhook.html)
+  documents Blueprint callbacks as post-hooks, without suppression of the original.
+- [UE4SS ExecuteWithDelay](https://docs.ue4ss.com/release/lua-api/global-functions/executewithdelay.html)
+  documents asynchronous execution.
+- [Altar SDK host declaration](https://github.com/Kein/Altar/blob/main/Source/Altar/Public/VAltarWidget.h)
+  exposes the concrete native host; this declaration is reference evidence, not
+  runtime validation of the new widget.

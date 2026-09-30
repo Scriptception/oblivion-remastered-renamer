@@ -5,6 +5,24 @@ All notable changes to this project are documented here. The project follows
 
 ## [Unreleased]
 
+## 1.1.1-rc.1 - 2026-09-30
+
+### Fixed
+
+- Replace the legacy enchanting text-entry Blueprint with a rename-only native
+  Unreal widget, avoiding its original OK/Back handlers and 30-character warning.
+  Enter confirms and Escape cancels; clickable OK/Back buttons are removed.
+- Queue delayed focus restoration and keyboard object checks onto the game thread.
+- Read Inventory row/form properties only after selecting the active widget.
+
+### Development
+
+- Add Lua regression scenarios and CI checks for dialog isolation, threading,
+  fresh-item key resolution, length validation, cancellation and recovery records.
+- Include hidden staging files when packaging on Linux as well as Windows.
+- This candidate is not runtime-tested. Crash resolution and platform compatibility
+  remain subject to the manual release checklist.
+
 ## [1.1.0] - 2026-07-21
 
 ### Added

@@ -5,7 +5,7 @@
 
 Rename player-created spells and player-created enchanted items from inside
 **The Elder Scrolls IV: Oblivion Remastered**. Highlight a custom spell or
-enchanted item, press **F2**, and enter its new name in the game's native
+enchanted item, press **F2**, and enter its new name in a rename-only Unreal
 text-entry screen.
 
 The mod deliberately rejects built-in spells, ordinary equipment, quest
@@ -22,7 +22,7 @@ game's saved custom-name map.
 ## Features
 
 - Renames player-created spells and named enchanted items.
-- Uses Oblivion's native in-game text-entry screen.
+- Uses a separate in-game Unreal text-entry screen with Enter/Escape controls.
 - Persists through normal game saves and reloads.
 - Preserves prefixes, leading spaces, and sorting tags exactly as entered.
 - Handles Inventory rows that still display the previous name after a rename.
@@ -46,6 +46,15 @@ game's saved custom-name map.
 The release was tested alongside FuzzUI - Interface Tweaks 2.0.0, Inventory
 Sorting Tags 1.5 Non-Deluxe, Press E To Confirm 1.0, Spell Hotkeys 1.2.5, and
 NL Tag Remover 1.3.3.
+
+### Current development candidate
+
+`1.1.1-rc.1` replaces the legacy enchanting text-edit screen with an independent
+rename widget and corrects off-thread focus access. Names up to 80 Unicode
+characters remain allowed. The candidate has passed automated checks only;
+its widget rendering, input handling, freshly enchanted items and Steam behaviour
+still require the manual checks in [Testing](docs/TESTING.md). The released
+v1.1.0 runtime evidence does not validate this candidate.
 
 ## Installation
 
@@ -81,7 +90,7 @@ WinGDK
 1. Open **Magic** and highlight a player-created spell with the mouse or
    keyboard. It does not need to be the equipped spell.
 2. Press **F2**.
-3. Enter the new name and choose **OK**, or choose **Back/Escape** to cancel.
+3. Enter the new name and press **Enter** to confirm, or **Escape** to cancel.
 4. Reopen Magic if the list has not refreshed, then make a normal game save.
 
 If Spell Hotkeys is installed, rebind the renamed spell. Spell Hotkeys stores
@@ -92,9 +101,11 @@ rewrite another mod's private data.
 
 1. Open **Inventory** and highlight an item created and named at an enchanting
    altar with the mouse or keyboard. You do not need to click it.
-2. Press **F2** and confirm the new name.
+2. Press **F2**, type the new name, and press **Enter** to confirm (**Escape** cancels).
 3. Close the full player menu and reopen Inventory to refresh the displayed
    row, then make a normal game save.
+
+The rename screen uses keyboard confirmation; it has no clickable OK/Back buttons.
 
 The Inventory row may continue to show the previous name until the player menu
 is reopened. A second F2 press is still safe: the mod uses the current saved
@@ -154,12 +165,14 @@ Close the game before updating or uninstalling.
 
 ## Development
 
-Run the validation and packaging scripts from PowerShell:
+Run the validation and packaging scripts from PowerShell. The regression harness
+requires Lua 5.3 on your PATH:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\validate.ps1
 npx --yes luaparse@0.3.1 .\src\OblivionRenamer\scripts\main.lua > $null
 npx --yes @johnnymorganz/stylua-bin@2.5.2 --check .\src\OblivionRenamer\scripts\main.lua
+lua .\tests\rename_dialog.lua
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\package.ps1
 ```
 
